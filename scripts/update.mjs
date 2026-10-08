@@ -108,10 +108,72 @@ async function retailUpdate(){
   save(path.join(STORE,'retail.json'), out);
 }
 
+/* ---------- 台北市公有零售市場行情（月，元/台斤）：data.taipei ---------- */
+const TPE_BASE = process.env.TPE_BASE || 'https://data.taipei';
+const TPE_DATASET = '54d9d492-1e2e-40d1-ae7b-fbce6f271bf1';
+async function tpeUpdate(){
+  const v = await getJSON(`${TPE_BASE}/api/frontstage/tpeod/dataset.view?id=${TPE_DATASET}`);
+  const res = (v && v.payload && v.payload.resources) || [];
+  for (const r of res){
+    const m = String(r.name||'').match(/(\d{2,3})年(\d{1,2})月/); if (!m) continue;
+    const ym = `${+m[1]+1911}-${pad2(m[2])}`;
+    const f = path.join(STORE,'tpe',ym+'.json');
+    if (exists(f)) continue;
+    const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), 60000);
+    try {
+      const resp = await fetch(`${TPE_BASE}/api/dataset/${TPE_DATASET}/resource/${r.rid}/download`, {signal: ctl.signal});
+      if (!resp.ok) throw new Error('HTTP '+resp.status);
+      const text = (await resp.text()).replace(/^﻿/, '');
+      const rows = [];
+      for (const line of text.split(/\r?\n/).slice(1)){
+        const c = line.split(','); if (c.length < 5) continue;
+        const item = c[3].trim(), price = parseFloat(c[c.length-1]);
+        if (item && price > 0) rows.push([item, price]);
+      }
+      if (rows.length) save(f, {m: ym, unit: '元/台斤', rows});
+    } catch(e){ log('tpe', ym, e.message); } finally { clearTimeout(to); }
+  }
+}
+const pad2 = n => String(n).padStart(2,'0');
+
+/* ---------- 國發會物價資訊看板：15項民生必需品賣場價格（月） ---------- */
+const NDC_BASE = process.env.NDC_BASE || 'https://price.ndc.gov.tw';
+async function ndcPost(body){
+  const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), 60000);
+  try {
+    const r = await fetch(`${NDC_BASE}/p/zh_tw/necessities_action`, {method:'POST', signal: ctl.signal,
+      headers: {'content-type':'application/x-www-form-urlencoded; charset=UTF-8', 'x-requested-with':'XMLHttpRequest', 'user-agent':'taiwan-price-bot (+github.com)'},
+      body: new URLSearchParams(body).toString()});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  } finally { clearTimeout(to); }
+}
+async function ndcUpdate(){
+  const cls = await ndcPost({action:'get_class_list', class_id:''});
+  const classes = (cls && Array.isArray(cls.msg)) ? cls.msg : [];
+  if (!classes.length) throw new Error('no NDC classes');
+  const [ty, tm] = iso(TODAY).split('-').map(Number);
+  const months = [];
+  for (let i = 1; i <= 30; i++){ let y = ty, m = tm - i; while (m <= 0){ m += 12; y--; } months.push(`${y}-${pad2(m)}`); }
+  for (const ym of months){
+    const f = path.join(STORE,'ndc',ym+'.json');
+    const recent = months.indexOf(ym) < 2;          // the last two months may still be filled in
+    if (exists(f) && !recent) continue;
+    if (outOfTime()) break;
+    const rows = [];
+    for (const c of classes){
+      const j = await ndcPost({action:'get_price_list', class_id: c.class_id, start_date: ym, end_date: ym}).catch(()=>null);
+      if (!j || j.error !== 0 || !Array.isArray(j.msg)) continue;
+      for (const p of j.msg){ const v = parseFloat(p.last_month_price); if (v > 0) rows.push([c.name, p.product_name, p.specification, v]); }
+    }
+    save(f, {m: ym, rows});
+  }
+}
+
 /* ---------- main ---------- */
 async function main(){
   log('start; today', iso(TODAY), 'days back', DAYS_BACK, 'base', BASE);
-  const small = [originUpdate(), retailUpdate(), ...POULTRY_APIS.map(poultryUpdate)].map(p => p.catch(e => log('small task failed:', e.message)));
+  const small = [originUpdate(), retailUpdate(), tpeUpdate(), ndcUpdate(), ...POULTRY_APIS.map(poultryUpdate)].map(p => p.catch(e => log('small task failed:', e.message)));
   // daily tasks, newest first; skip days already stored unless recent
   const tasks = [];
   for (let i = 0; i < DAYS_BACK; i++){

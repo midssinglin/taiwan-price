@@ -172,6 +172,28 @@ for (const it of RETAIL_ITEMS){
   catalog.items.push({id: it.id, n: it.name, k: 'retail', c: it.cat, d: last[0]+'-15', p: last[1], p1: prev && prev[1], ly: yr && yr[1], monthly: true});
 }
 
+/* ---------- 台北市公有零售市場（月）→ 元/公斤 ---------- */
+const tpe = {};
+if (fs.existsSync(path.join(STORE,'tpe'))) for (const f of fs.readdirSync(path.join(STORE,'tpe')).filter(x=>/^\d{4}-\d{2}\.json$/.test(x)).sort()){
+  const j = readJSON(path.join(STORE,'tpe',f)); if (!j) continue;
+  for (const [item, v] of j.rows) (tpe[item] ||= []).push([j.m, r1(v/JIN)]);
+}
+out('tpe.json', tpe);
+
+/* ---------- 賣場價格（國發會 15 項民生必需品，月） ---------- */
+const goods = {};
+if (fs.existsSync(path.join(STORE,'ndc'))) for (const f of fs.readdirSync(path.join(STORE,'ndc')).filter(x=>/^\d{4}-\d{2}\.json$/.test(x)).sort()){
+  const j = readJSON(path.join(STORE,'ndc',f)); if (!j) continue;
+  for (const [cls, prod, spec, v] of j.rows){ const c = (goods[cls] ||= {}); const k = prod+'｜'+spec; (c[k] ||= {n: prod, spec, pts: []}).pts.push([j.m, v]); }
+}
+const goodsOut = Object.fromEntries(Object.entries(goods).map(([c, o]) => [c, Object.values(o)]));
+out('goods.json', goodsOut);
+for (const [cls, prods] of Object.entries(goodsOut)){
+  const last = prods.flatMap(p => p.pts.map(x => x[0])).sort().pop(); if (!last) continue;
+  const cur = prods.map(p => p.pts.find(x => x[0] === last)).filter(Boolean).map(x => x[1]);
+  catalog.items.push({id: 'g'+nameId(cls), n: cls==='雞蛋'?'盒裝雞蛋':cls, cls, k: 'goods', c: '日用品', d: last+'-15', p: Math.min(...cur), n2: prods.length, monthly: true, raw: true});
+}
+
 /* ---------- events: typhoons (events.json) + national holidays ---------- */
 const events = (readJSON(path.join(ROOT,'events.json'), {events:[]}).events || []).slice();
 const y0 = new Date(T0).getUTCFullYear(), y1 = new Date(TODAY).getUTCFullYear();
