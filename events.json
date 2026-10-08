@@ -1,0 +1,18 @@
+{
+  "_note": "颱風警報期間（中央氣象署颱風資料庫「有發警報颱風列表」，時間為台灣時間）。可手動新增其他事件，type 可用 typhoon / event。國定假日由建置腳本自動加入。",
+  "events": [
+    {"type": "typhoon", "name": "沙德爾", "level": "中度", "start": "2026-08-27", "end": "2026-08-28"},
+    {"type": "typhoon", "name": "白海豚", "level": "中度", "start": "2026-08-07", "end": "2026-08-09"},
+    {"type": "typhoon", "name": "紅霞", "level": "中度", "start": "2026-07-23", "end": "2026-07-25"},
+    {"type": "typhoon", "name": "巴威", "level": "強烈", "start": "2026-07-09", "end": "2026-07-12"},
+    {"type": "typhoon", "name": "鳳凰", "level": "中度", "start": "2025-11-10", "end": "2025-11-12"},
+    {"type": "typhoon", "name": "樺加沙", "level": "強烈", "start": "2025-09-21", "end": "2025-09-23"},
+    {"type": "typhoon", "name": "楊柳", "level": "中度", "start": "2025-08-12", "end": "2025-08-14"},
+    {"type": "typhoon", "name": "薇帕", "level": "輕度", "start": "2025-07-18", "end": "2025-07-19"},
+    {"type": "typhoon", "name": "丹娜絲", "level": "中度", "start": "2025-07-05", "end": "2025-07-07"},
+    {"type": "typhoon", "name": "天兔", "level": "中度", "start": "2024-11-14", "end": "2024-11-16"},
+    {"type": "typhoon", "name": "康芮", "level": "強烈", "start": "2024-10-29", "end": "2024-11-01"},
+    {"type": "typhoon", "name": "山陀兒", "level": "強烈", "start": "2024-09-29", "end": "2024-10-04"},
+    {"type": "typhoon", "name": "凱米", "level": "強烈", "start": "2024-07-22", "end": "2024-07-26"}
+  ]
+}

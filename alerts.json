@@ -1,0 +1,5 @@
+{
+  "_note": "到價提醒設定。每天自動更新資料後，若品項最新價格低於 below（元/公斤），會在這個 repo 開一則 Issue（GitHub 會寄 Email，GitHub App 也會推播）；有設定 Telegram 的話也會發訊息。可在網頁「收藏」頁直接產生這份設定再貼上。範例：{\"name\": \"甘藍\", \"kind\": \"farm\", \"below\": 25}。kind 可為 farm（蔬果）、fish（漁產）、pork、poultry、retail。dailyDigest 設為 true 時，每天另外寄一份「今日划算」摘要。",
+  "alerts": [],
+  "dailyDigest": false
+}

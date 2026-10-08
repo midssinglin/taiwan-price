@@ -1,0 +1,73 @@
+name: 更新菜價資料並部署
+
+on:
+  schedule:
+    # 台灣時間 08:10、14:10、20:10（批發行情多在上午至下午公布）
+    - cron: '10 0,6,12 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ['store/**', 'README.md']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  issues: write
+
+concurrency:
+  group: update-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 抓取農業部資料（新到舊，時間到就停，下次接續）
+        run: node scripts/update.mjs
+        continue-on-error: true
+        env:
+          TIME_BUDGET_MIN: 50
+
+      - name: 產生網站資料
+        run: node scripts/build.mjs
+
+      - name: 到價提醒
+        run: node scripts/alerts.mjs
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: 保存原始資料
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add store
+          if git diff --cached --quiet; then echo "no data changes"; exit 0; fi
+          git commit -m "資料更新 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do git pull --rebase -X theirs && git push && break; sleep 5; done
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
