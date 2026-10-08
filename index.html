@@ -529,7 +529,7 @@ async function liveFarm(item,s,e,onTick){
   const rows0=raw.filter(r=>{ const n=r['作物名稱']; return n&&n!=='休市'&&(n===item.name||n.startsWith(item.name+'-'))&&(r['種類代碼']==='N04'||r['種類代碼']==='N05'); });
   const vq=new Map(); for(const r of rows0) vq.set(r['作物名稱'],(vq.get(r['作物名稱'])||0)+(+r['交易量']||0));
   const varieties=[...vq.entries()].sort((a,b)=>b[1]-a[1]).map(([n])=>n);
-  let sel=S.varSel&&S.varSel.filter(v=>vq.has(v)); if(!sel||!sel.length){ const dom=varieties.filter(v=>!isImport(v)); sel=dom.length?dom:varieties; }
+  let sel=S.varSel&&S.varSel.filter(v=>vq.has(v)); if(!sel||!sel.length){ const d0=varieties.filter(v=>!isImport(v)); const pool=d0.length?d0:varieties; const tot=pool.reduce((a,v)=>a+vq.get(v),0); sel=pool.filter(v=>vq.get(v)>=0.05*tot); if(!sel.length) sel=pool; }
   S.varSel=sel; const selSet=new Set(sel);
   const a=aggDaily(rows0.filter(r=>selSet.has(r['作物名稱'])).map(r=>({t:parseRoc(r['交易日期']),avg:+r['平均價'],hi:+r['上價'],lo:+r['下價'],q:+r['交易量'],city:cityOf(r['市場名稱'],FARM_MARKET_CITY)})).filter(r=>r.t>=s&&r.t<=e));
   let origin=null, originName='';

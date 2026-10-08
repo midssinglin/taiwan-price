@@ -54,8 +54,11 @@ function aggregate(rows, cityMap, isDomestic){
   const res = [];
   for (const it of items.values()){
     const allVars = [...it.vars.keys()];
-    const dom = allVars.filter(isDomestic);
-    const sel = new Set(dom.length ? dom : allVars);
+    // default selection: domestic varieties with at least 5% of the volume (drops sprouts, hearts and other niche products)
+    const pool = allVars.filter(isDomestic).length ? allVars.filter(isDomestic) : allVars;
+    const tot = pool.reduce((a,v)=>a+it.vars.get(v).q,0);
+    const dom = pool.filter(v => it.vars.get(v).q >= 0.05*tot);
+    const sel = new Set(dom.length ? dom : pool);
     const series = (rs, withCity) => {
       const day = new Map(), city = new Map();
       for (const r of rs){
