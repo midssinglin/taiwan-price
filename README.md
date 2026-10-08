@@ -40,6 +40,7 @@
   4. 部署到 GitHub Pages。
 - 想立刻更新：到 Actions → 「更新菜價資料並部署」→ Run workflow。
 - 颱風警報期間記錄在 `events.json`，可自行增修。
+- 國發會的賣場價格網站不接受 GitHub 伺服器的連線，所以這部分無法自動更新。每月想更新時，在台灣的電腦上執行 `ONLY=ndc node scripts/update.mjs`，再 commit 並 push `store/ndc` 即可（需要 Node 20 以上）。
 
 ## 到價推播
 

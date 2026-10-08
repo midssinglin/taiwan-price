@@ -188,7 +188,12 @@ async function ndcUpdate(){
 /* ---------- main ---------- */
 async function main(){
   log('start; today', iso(TODAY), 'days back', DAYS_BACK, 'base', BASE);
-  const named = {origin: originUpdate(), retail: retailUpdate(), tpe: tpeUpdate(), ndc: ndcUpdate(), ...Object.fromEntries(POULTRY_APIS.map(a => [a, poultryUpdate(a)]))};
+  // ONLY=ndc (or tpe, origin, retail) runs just that source, e.g. from a computer in Taiwan for the 賣場價格 site,
+  // which refuses requests from GitHub's servers.
+  const ONLY = process.env.ONLY;
+  const makers = {origin: originUpdate, retail: retailUpdate, tpe: tpeUpdate, ndc: ndcUpdate, ...Object.fromEntries(POULTRY_APIS.map(a => [a, () => poultryUpdate(a)]))};
+  if (ONLY){ await makers[ONLY]().catch(e => { console.error(e); process.exitCode = 1; }); log('done', ONLY, written, 'files changed'); return; }
+  const named = Object.fromEntries(Object.entries(makers).map(([k,f]) => [k, f()]));
   const small = Object.entries(named).map(([k,p]) => p.catch(e => log(`${k} failed:`, e.message)));
   // daily tasks, newest first; skip days already stored unless recent
   const tasks = [];
