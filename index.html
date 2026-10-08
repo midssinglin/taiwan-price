@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>台灣菜價通</title>
+<meta name="description" content="即時抓取農業部開放資料，比較台灣蔬果、漁產、肉品與雞蛋的產地、批發、零售價格與各縣市行情。">
+<meta name="theme-color" content="#2b3f73">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: market price board — sticky search bar, left list of today's board, right detail with three stacked chart panels */
+:root{
+  --bg:#f5f6f2; --surface:#ffffff; --surface-2:#eceee8; --ink:#16201b; --ink-2:#4a554f; --ink-3:#7a837d;
+  --line:#dde1d9; --accent:#2b3f73; --accent-soft:#e3e8f4; --up:#c2352b; --down:#23804a; --up-soft:#fbe9e7; --down-soft:#e5f3ea;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --band:rgba(42,120,214,.13);
+  --f-display:"LXGW WenKai TC","Kaiti TC","STKaiti","DFKai-SB",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111412; --surface:#191d1a; --surface-2:#222723; --ink:#edf1ec; --ink-2:#b6beb8; --ink-3:#848d86;
+  --line:#2d332e; --accent:#a9bbf2; --accent-soft:#232c45; --up:#f0705f; --down:#4cc07d; --up-soft:#3a1f1c; --down-soft:#173022;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --band:rgba(57,135,229,.2); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111412; --surface:#191d1a; --surface-2:#222723; --ink:#edf1ec; --ink-2:#b6beb8; --ink-3:#848d86;
+  --line:#2d332e; --accent:#a9bbf2; --accent-soft:#232c45; --up:#f0705f; --down:#4cc07d; --up-soft:#3a1f1c; --down-soft:#173022;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --band:rgba(57,135,229,.2); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;gap:14px;align-items:center;padding-block:10px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:.04em;white-space:nowrap;display:flex;align-items:baseline;gap:8px}
+.brand small{font-family:var(--f-body);font-size:12px;color:var(--ink-3);font-weight:400;letter-spacing:0}
+.search{position:relative;flex:1 1 280px;min-width:0}
+.search input{width:100%;height:42px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);padding:0 16px 0 40px;outline:none}
+.search input:focus{border-color:var(--accent)}
+.search svg{position:absolute;left:14px;top:12px;width:18px;height:18px;color:var(--ink-3)}
+.sugg{position:absolute;left:0;right:0;top:48px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.14);max-height:360px;overflow:auto;padding:6px}
+.sugg button{display:flex;width:100%;gap:10px;align-items:center;border:0;background:none;padding:8px 10px;border-radius:8px;text-align:left;cursor:pointer}
+.sugg button[aria-selected="true"],.sugg button:hover{background:var(--accent-soft)}
+.sugg .hint{color:var(--ink-3);font-size:13px;padding:8px 10px}
+.tag{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:none;padding:5px 12px;border-radius:999px;cursor:pointer;color:var(--ink-2);font-size:13.5px;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:500}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* main grid */
+.main{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;padding-block:20px 40px}
+@media (max-width:960px){.main{grid-template-columns:minmax(0,1fr)}.board{order:2}.detail{order:1}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+h2,h3{text-wrap:balance;margin:0}
+
+/* board */
+.board{display:flex;flex-direction:column;min-width:0;align-self:start;position:sticky;top:76px;max-height:calc(100vh - 96px)}
+@media (max-width:960px){.board{position:static;max-height:none}}
+.board-head{padding:14px 14px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.board-head h2{font-family:var(--f-display);font-size:20px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.board-head h2 span{font-family:var(--f-body);font-size:12px;color:var(--ink-3);font-weight:400}
+.board-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.board-tools select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 8px;font-size:13px}
+.blist{overflow:auto;flex:1;min-height:0}
+@media (max-width:960px){.blist{max-height:520px}}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:9px 14px;cursor:pointer;text-align:left}
+.brow:hover{background:var(--surface-2)}
+.brow[aria-current="true"]{background:var(--accent-soft)}
+.brow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow .nm small{color:var(--ink-3);font-size:12px;margin-left:6px}
+.brow .pr{font-size:14px;text-align:right}
+.chg{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:12.5px;padding:1px 6px;border-radius:6px;min-width:60px;text-align:right}
+.chg.up{color:var(--up);background:var(--up-soft)} .chg.down{color:var(--down);background:var(--down-soft)} .chg.flat{color:var(--ink-3);background:var(--surface-2)}
+.empty{padding:20px 14px;color:var(--ink-3);font-size:14px}
+
+/* detail */
+.detail{display:flex;flex-direction:column;gap:16px;min-width:0}
+.hero{padding:18px 18px 16px;display:flex;flex-direction:column;gap:14px}
+.hero-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.title h1{font-family:var(--f-display);font-size:34px;line-height:1.1;margin:0;letter-spacing:.03em}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:13px;cursor:pointer;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed="true"]{border-color:var(--ink-2);color:var(--ink);background:var(--surface-2);font-weight:500}
+.chip .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .k{font-size:12px;color:var(--ink-3);letter-spacing:.04em}
+.stat .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:22px;font-weight:600;line-height:1.2}
+.stat .v.big{font-size:28px}
+.stat .s{font-size:12px;color:var(--ink-3)}
+.stat .v.up{color:var(--up)} .stat .v.down{color:var(--down)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 10px;border-radius:999px;font-weight:500}
+.pill.up{background:var(--up-soft);color:var(--up)} .pill.down{background:var(--down-soft);color:var(--down)} .pill.flat{background:var(--surface-2);color:var(--ink-2)}
+.card{padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.card-head h3{font-family:var(--f-display);font-size:21px;letter-spacing:.03em}
+.card-head p{margin:2px 0 0;color:var(--ink-3);font-size:13px;max-width:62ch}
+.chart{position:relative;width:100%;min-height:240px}
+.chart svg{display:block;width:100%;overflow:visible}
+.chart .axis text{fill:var(--ink-3);font:11px var(--f-num)}
+.chart .grid line{stroke:var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+.legend i.dash{background:none!important;border-top:2px dashed currentColor;height:0}
+.legend i.band{height:10px;border-radius:3px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.16);min-width:150px;z-index:5}
+.tip .d{color:var(--ink-3);margin-bottom:4px;font-family:var(--f-num)}
+.tip .r{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.tip .r b{font-weight:500;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.tip .r span{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.tip i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.loading{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:13.5px;min-height:240px;justify-content:center;flex-direction:column}
+.bar{width:180px;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.err{color:var(--up);font-size:13.5px;padding:12px;background:var(--up-soft);border-radius:8px}
+.note{font-size:12.5px;color:var(--ink-3)}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-weight:500;color:var(--ink-3);font-size:12px;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.n,th.n{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface-2)}
+tr.off td{color:var(--ink-3)}
+.mini{display:inline-block;height:6px;border-radius:3px;background:var(--ink-3);opacity:.35;vertical-align:middle}
+.about{padding:18px;font-size:13.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:8px}
+.about h3{font-family:var(--f-display);font-size:19px;color:var(--ink)}
+.about ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.about a{color:var(--accent)}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">台灣菜價通<small>農業部開放資料・即時抓取</small></div>
+    <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" id="searchBox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="搜尋：高麗菜、香蕉、白蝦、雞蛋、豬肉…" autocomplete="off" aria-label="搜尋品項" aria-controls="sugg">
+      <div class="sugg" id="sugg" role="listbox" hidden></div>
+    </div>
+    <div class="seg" role="group" aria-label="價格單位">
+      <button type="button" data-unit="kg" aria-pressed="true">元/公斤</button>
+      <button type="button" data-unit="jin" aria-pressed="false">元/台斤</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap main">
+  <aside class="board panel" aria-label="最新行情">
+    <div class="board-head">
+      <h2>最新批發行情 <span id="boardDate">讀取中…</span></h2>
+      <div class="board-tools">
+        <div class="seg" role="group" aria-label="類別" id="boardCat">
+          <button type="button" data-cat="蔬菜" aria-pressed="true">蔬菜</button>
+          <button type="button" data-cat="水果" aria-pressed="false">水果</button>
+          <button type="button" data-cat="漁產" aria-pressed="false">漁產</button>
+          <button type="button" data-cat="肉蛋" aria-pressed="false">肉蛋</button>
+        </div>
+        <select id="boardSort" aria-label="排序">
+          <option value="vol">交易量大</option>
+          <option value="up">漲最多</option>
+          <option value="down">跌最多</option>
+          <option value="cheap">最便宜</option>
+        </select>
+      </div>
+    </div>
+    <div class="blist" id="blist"><div class="empty">正在讀取全台批發市場最新交易資料…</div></div>
+  </aside>
+
+  <main class="detail" id="detail">
+    <section class="panel hero" aria-live="polite">
+      <div class="hero-top">
+        <div class="title"><h1 id="itemName">—</h1><span class="tag" id="itemCat"></span><span id="itemPill"></span></div>
+        <div class="seg" role="group" aria-label="時間範圍" id="ranges">
+          <button type="button" data-days="7" aria-pressed="false">7天</button>
+          <button type="button" data-days="30" aria-pressed="true">1個月</button>
+          <button type="button" data-days="90" aria-pressed="false">3個月</button>
+          <button type="button" data-days="180" aria-pressed="false">6個月</button>
+          <button type="button" data-days="365" aria-pressed="false">1年</button>
+        </div>
+      </div>
+      <div class="chips" id="varieties" hidden></div>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="panel card">
+      <div class="card-head">
+        <div><h3>價格趨勢</h3><p id="trendDesc">全台各批發市場依交易量加權的每日均價。</p></div>
+        <label class="toggle"><input type="checkbox" id="ma7"> 7日均線</label>
+      </div>
+      <div class="chart" id="trendChart"></div>
+      <div class="legend" id="trendLegend"></div>
+    </section>
+
+    <section class="panel card">
+      <div class="card-head">
+        <div><h3>通路比價</h3><p id="chanDesc">同一品項在產地、批發、零售各層的價格。</p></div>
+      </div>
+      <div class="chart" id="chanChart"></div>
+      <div class="legend" id="chanLegend"></div>
+      <div class="tbl-wrap" id="chanTable"></div>
+    </section>
+
+    <section class="panel card">
+      <div class="card-head">
+        <div><h3>地區比較</h3><p id="regDesc">各縣市批發市場的價格，點城市可加入或移出圖表。</p></div>
+      </div>
+      <div class="chips" id="cityChips"></div>
+      <div class="chart" id="regChart"></div>
+      <div class="legend" id="regLegend"></div>
+      <div class="tbl-wrap" id="regTable"></div>
+    </section>
+
+  </main>
+</div>
+<div class="wrap" style="padding-block:0 40px">
+  <section class="panel about">
+      <h3>資料來源與說明</h3>
+      <ul>
+        <li>所有價格都是打開頁面時，直接向 <a href="https://data.moa.gov.tw/" target="_blank" rel="noopener">農業部農業資料開放平臺</a> 即時抓取，沒有經過任何中間伺服器。</li>
+        <li><b>蔬果批發</b>：農產品交易行情（全台約 20 個果菜批發市場，含上價、中價、下價、平均價與交易量）。<b>產地價</b>：農產品產地價格（各地農會查報的全台當日平均價）。</li>
+        <li><b>漁產</b>：漁產品交易行情（全台約 20 個魚市場）。<b>毛豬</b>：毛豬交易行情（各縣市肉品市場，活體重量計價）。<b>家禽與蛋</b>：家禽交易行情（白肉雞、雞蛋、土雞、鴨、鵝）。</li>
+        <li><b>零售價</b>：畜產都市零售價格（豬肉部位、雞蛋、雞鴨鵝屠體、牛羊肉），為月資料，通常落後數個月。</li>
+        <li>蔬菜、水果、漁產目前沒有政府公開的零售或量販店（如全聯、家樂福）即時價格 API，所以通路比價以「產地 → 批發」呈現。菜市場和超市的售價一般會高於批發價，差額包含運費、損耗與人工。</li>
+        <li>1 台斤 = 0.6 公斤。家禽與雞蛋的原始報價為「元/台斤」，切換單位時會自動換算。</li>
+        <li>農業部伺服器回應較慢，長時間範圍可能需要 10–40 秒；讀過的資料會暫存在你的瀏覽器裡，下次會快很多。</li>
+      </ul>
+    </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const BASE = 'https://data.moa.gov.tw';
+const DAY = 86400000;
+const JIN = 0.6; // 1 台斤 = 0.6 kg
+
+/* ---------------- dates ---------------- */
+function todayTW(){
+  const p = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()).split('-').map(Number);
+  return Date.UTC(p[0],p[1]-1,p[2]);
+}
+const TODAY = todayTW();
+const ymd = t => { const d=new Date(t); return [d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate()]; };
+const pad = n => String(n).padStart(2,'0');
+const rocDot = t => { const [y,m,d]=ymd(t); return `${y-1911}.${pad(m)}.${pad(d)}`; };      // 115.10.07
+const rocCompact = t => { const [y,m,d]=ymd(t); return `${y-1911}${pad(m)}${pad(d)}`; };   // 1151007
+const slash = t => { const [y,m,d]=ymd(t); return `${y}/${pad(m)}/${pad(d)}`; };            // 2026/10/07
+function parseRoc(s){ // "115.10.07" or "1151007"
+  s=String(s||'').trim(); let m=s.match(/^(\d{2,3})\.(\d{1,2})\.(\d{1,2})$/);
+  if(!m) m=s.match(/^(\d{3})(\d{2})(\d{2})$/);
+  if(!m) return null; return Date.UTC(+m[1]+1911,+m[2]-1,+m[3]);
+}
+function parseSlash(s){ const m=String(s||'').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/); return m?Date.UTC(+m[1],+m[2]-1,+m[3]):null; }
+const fmtMD = t => { const [,m,d]=ymd(t); return `${m}/${d}`; };
+const fmtFull = t => { const [y,m,d]=ymd(t); return `${y}/${m}/${d}`; };
+const fmtYM = t => { const [y,m]=ymd(t); return `${y}/${m}`; };
+const monthStart = t => { const [y,m]=ymd(t); return Date.UTC(y,m-1,1); };
+const monthEnd = t => { const [y,m]=ymd(t); return Date.UTC(y,m,0); };
+const quarterStart = t => { const [y,m]=ymd(t); return Date.UTC(y,Math.floor((m-1)/3)*3,1); };
+const quarterEnd = t => { const [y,m]=ymd(t); return Date.UTC(y,Math.floor((m-1)/3)*3+3,0); };
+
+/* ---------------- cache + fetch queue ---------------- */
+const mem = new Map();
+let idbP = null;
+function idb(){
+  if(idbP) return idbP;
+  idbP = new Promise(res=>{
+    try{ const r=indexedDB.open('tw-price-cache',1);
+      r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+      r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); r.onblocked=()=>res(null);
+    }catch(e){ res(null); }
+  });
+  return idbP;
+}
+async function idbGet(k){ const db=await idb(); if(!db) return null; return new Promise(res=>{ try{ const q=db.transaction('kv').objectStore('kv').get(k); q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null);}catch(e){res(null);} }); }
+async function idbPut(k,v){ const db=await idb(); if(!db) return; try{ db.transaction('kv','readwrite').objectStore('kv').put(v,k);}catch(e){} }
+const MAXC = 5; let active = 0; const queue = [];
+function limited(fn){ return new Promise((res,rej)=>{ queue.push([fn,res,rej]); pump(); }); }
+function pump(){ while(active<MAXC && queue.length){ const [fn,res,rej]=queue.shift(); active++; fn().then(res,rej).finally(()=>{active--;pump();}); } }
+/** ttl in ms; Infinity = never expires */
+function getJSON(url, ttl){
+  if(mem.has(url)) return mem.get(url);
+  const p = (async()=>{
+    const hit = await idbGet(url);
+    if(hit && (ttl===Infinity || Date.now()-hit.ts < ttl)) return hit.data;
+    const data = await limited(async()=>{
+      const ctl = new AbortController(); const to=setTimeout(()=>ctl.abort(),90000);
+      try{ const r = await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+      finally{ clearTimeout(to); }
+    });
+    idbPut(url,{ts:Date.now(),data});
+    return data;
+  })();
+  mem.set(url,p);
+  p.catch(()=>mem.delete(url));
+  return p;
+}
+const ttlFor = endT => (endT < TODAY - 3*DAY) ? Infinity : 2*3600*1000;
+
+/* ---------------- static catalog ---------------- */
+const CITY_ORDER = ['台北','新北','基隆','桃園','新竹','苗栗','台中','彰化','南投','雲林','嘉義','台南','高雄','屏東','宜蘭','花蓮','台東','澎湖','北部','中部','南部'];
+const DEFAULT_CITIES = ['台北','台中','台南','高雄','花蓮','北部','中部','南部'];
+const FARM_MARKET_CITY = {'台北一':'台北','台北二':'台北','台北市場':'台北','板橋區':'新北','三重區':'新北','桃農':'桃園','台中市':'台中','台中市場':'台中','豐原區':'台中','東勢鎮':'台中','永靖鄉':'彰化','溪湖鎮':'彰化','彰化市場':'彰化','南投市':'南投','西螺鎮':'雲林','嘉義市':'嘉義','台南市場':'台南','台南市':'台南','高雄市':'高雄','高雄市場':'高雄','鳳山區':'高雄','屏東市':'屏東','宜蘭市':'宜蘭','花蓮市':'花蓮','台東市':'台東'};
+const FISH_MARKET_CITY = {'台北':'台北','三重':'新北','基隆':'基隆','桃園':'桃園','新竹':'新竹','苗栗':'苗栗','台中':'台中','彰化':'彰化','埔心':'彰化','斗南':'雲林','嘉義':'嘉義','新營':'台南','佳里':'台南','台南':'台南','岡山':'高雄','梓官':'高雄','興達港':'高雄','高雄':'高雄','花蓮':'花蓮','澎湖':'澎湖','宜蘭':'宜蘭','南方澳':'宜蘭','屏東':'屏東','東港':'屏東','台東':'台東'};
+function cityOf(name, map){
+  name = String(name||'').replace(/臺/g,'台').trim();
+  if(map[name]) return map[name];
+  for(const c of CITY_ORDER) if(name.startsWith(c)) return c;
+  return name.slice(0,2);
+}
+const ALIASES = {'高麗菜':'甘藍','包心菜':'甘藍','空心菜':'蕹菜','大白菜':'結球白菜','山東白菜':'結球白菜','地瓜':'甘藷','番薯':'甘藷','地瓜葉':'甘藷葉','芭樂':'番石榴','小黃瓜':'花胡瓜','大黃瓜':'胡瓜','四季豆':'敏豆','菜豆':'敏豆','青椒':'甜椒','紅蘿蔔':'胡蘿蔔','白蘿蔔':'蘿蔔','香菜':'芫荽','蒜頭':'大蒜','芋頭':'芋','番茄':'番茄','蕃茄':'番茄','玉米':'玉米','筊白筍':'茭白筍','美生菜':'萵苣','A菜':'萵苣','大陸妹':'萵苣','綠花椰':'青花苔','花椰菜':'花椰菜','鳳梨':'鳳梨','奇異果':'奇異果','火龍果':'紅龍果','柳丁':'柳橙','吳郭魚':'吳郭魚','台灣鯛':'吳郭魚','秋刀魚':'秋刀','豬':'豬肉','雞肉':'白肉雞','土雞':'紅羽土雞','鴨':'番鴨','蛋':'雞蛋'};
+const FISH_NAMES = ['吳郭魚','虱目魚','虱目魚肚','白蝦','草蝦','鮭魚','鮭魚(凍)','（日本）白帶魚','午仔魚','金目鱸','鱸魚','透抽','透抽(凍)','花枝','花枝(凍)','鯖魚','鯖魚(凍)','肉魚','土魠','馬加','黃花','白口','赤宗','花鰹','煙仔虎','珍珠龍膽/龍虎斑','石斑魚','青斑','加州鱸','草魚','鰱魚','鯉魚','香魚','海鰻','鱔魚','泥鰍','田蛙','牡蠣養','文蛤養','蜆','鐘螺(海)','象魚(臭肚)','黃臘鰺(紅杉)','盤仔','其他鯛類','勿仔','劍旗魚凍','大眼鮪凍','黃鰭鮪凍','長鰭鮪凍','水鯊凍','巴闌(凍)','細鱗油甘(凍)','粗鱗油甘(凍)','紅皮刀凍','秋刀','小卷','章魚','沙蝦','劍蝦','紅蟳','花蟹','三點蟹'];
+const MEAT = [
+  {id:'pork',name:'豬肉',cat:'肉品',kind:'pork',retail:['梅花肉','後腿肉','大排','前腳','後腳','腹協肉','背脊肉'],retailDefault:['梅花肉','後腿肉','大排']},
+  {id:'egg',name:'雞蛋',cat:'蛋品',kind:'poultry',api:'PoultryTransType_BoiledChicken_Eggs',fields:[['egg_Price','大運輸價（批發）'],['egg_Producer_Price','產地價']],main:0,retail:['雞蛋(散裝-產業協會)'],retailDefault:['雞蛋(散裝-產業協會)']},
+  {id:'broiler',name:'白肉雞',cat:'肉品',kind:'poultry',api:'PoultryTransType_BoiledChicken_Eggs',fields:[['TaijinPrice_2.0kgup','產地毛雞 2.0kg以上'],['TaijinPrice_1.75kg_1.95kg','產地毛雞 1.75–1.95kg'],['Store_KP_TaijinPrice','門市價（高屏）']],main:0,retail:['白肉雞(屠體)'],retailDefault:['白肉雞(屠體)'],note:'產地價為活體毛雞價格，零售為屠體價格。'},
+  {id:'red',name:'紅羽土雞',cat:'肉品',kind:'poultry',api:'PoultryTransType_RedFeather',fields:[['RedFeather_N_M','北區（公）'],['RedFeather_C_M','中區（公）'],['RedFeather_S_M','南區（公）'],['RedFeather_N_F','北區（母）'],['RedFeather_C_F','中區（母）'],['RedFeather_S_F','南區（母）']],main:'avgM',regions:{'北部':['RedFeather_N_M','RedFeather_N_F'],'中部':['RedFeather_C_M','RedFeather_C_F'],'南部':['RedFeather_S_M','RedFeather_S_F']},retail:['土雞(公-屠體)','土雞(母-屠體)'],retailDefault:['土雞(公-屠體)'],note:'產地價為活體價格，零售為屠體價格。'},
+  {id:'black',name:'黑羽土雞',cat:'肉品',kind:'poultry',api:'PoultryTransType_BlackFeather',fields:[['BlackFeather_S_M','南區（公）'],['BlackFeather_S_F','南區（母）']],main:0,retail:['土雞(公-屠體)','土雞(母-屠體)'],retailDefault:['土雞(公-屠體)'],note:'產地價為活體價格，零售為屠體價格。'},
+  {id:'duckegg',name:'鴨蛋',cat:'蛋品',kind:'poultry',api:'PoultryTransType_Goose_Duck_Duckegg',fields:[['Duckegg_TNN_TaijinPrice','新蛋（台南）']],main:0,retail:['鴨蛋(散裝-產業協會)'],retailDefault:['鴨蛋(散裝-產業協會)']},
+  {id:'duck',name:'番鴨',cat:'肉品',kind:'poultry',api:'PoultryTransType_Goose_Duck_Duckegg',fields:[['Duck_75D_TaijinPrice','土番鴨 75天'],['Duck_M_TaijinPrice','正番鴨（公）']],main:0,retail:['鴨(土番-屠體)'],retailDefault:['鴨(土番-屠體)'],note:'產地價為活體價格，零售為屠體價格。'},
+  {id:'goose',name:'鵝',cat:'肉品',kind:'poultry',api:'PoultryTransType_Goose_Duck_Duckegg',fields:[['Goose_WR_TaijinPrice','肉鵝 白羅曼']],main:0,retail:['鵝(屠體)'],retailDefault:['鵝(屠體)'],note:'產地價為活體價格，零售為屠體價格。'},
+  {id:'beef',name:'牛肉',cat:'肉品',kind:'retail',retail:['國產牛肉(牛腩)'],retailDefault:['國產牛肉(牛腩)']},
+  {id:'lamb',name:'羊肉',cat:'肉品',kind:'retail',retail:['國產羊肉(中肉)'],retailDefault:['國產羊肉(中肉)']},
+];
+const COMMON_FARM = ['甘藍','結球白菜','小白菜','青江白菜','蕹菜','菠菜','萵苣','花椰菜','青花苔','胡蘿蔔','蘿蔔','洋蔥','馬鈴薯','番茄','花胡瓜','胡瓜','絲瓜','苦瓜','茄子','甜椒','青蔥','大蒜','生薑','芋','甘藷','玉米','敏豆','茭白筍','香蕉','鳳梨','番石榴','木瓜','西瓜','葡萄','蘋果','柳橙','芒果','文旦','蓮霧','紅龍果'];
+
+/* ---------------- state ---------------- */
+const S = {
+  unit: 'kg', days: 30, item: null, varSel: null, cities: [], ma7:false, boardCat:'蔬菜', boardSort:'vol',
+  farmCatalog: new Map(), board: null, token: 0, last: null,
+};
+try{ const s=JSON.parse(localStorage.getItem('twprice')||'{}'); if(s.unit) S.unit=s.unit; if(s.days) S.days=s.days; if(Array.isArray(s.cities)) S.cities=s.cities; if(s.item) S.savedItem=s.item; }catch(e){}
+function save(){ try{ localStorage.setItem('twprice',JSON.stringify({unit:S.unit,days:S.days,cities:S.cities,item:S.item&&{kind:S.item.kind,name:S.item.name,id:S.item.id,cat:S.item.cat}})); }catch(e){} }
+const conv = v => v==null||!isFinite(v) ? null : (S.unit==='kg' ? v : v*JIN);
+const unitLabel = () => S.unit==='kg' ? '元/公斤' : '元/台斤';
+const fmtP = v => { v=conv(v); if(v==null) return '—'; return v>=100 ? v.toFixed(0) : v.toFixed(1); };
+const pct = (a,b) => (a==null||b==null||!b) ? null : (a-b)/b*100;
+function chgHTML(p){ if(p==null) return '<span class="chg flat">—</span>'; const c = Math.abs(p)<0.5?'flat':(p>0?'up':'down'); const s=p>0?'▲':(p<0?'▼':''); return `<span class="chg ${c}">${s}${Math.abs(p).toFixed(1)}%</span>`; }
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $ = id => document.getElementById(id);
+
+/* ---------------- loaders ---------------- */
+const FARM = BASE+'/Service/OpenData/FromM/FarmTransData.aspx';
+function baseName(n){ return String(n).split('-')[0].trim(); }
+const isImport = n => /進口/.test(n);
+
+async function fetchFarmRange(crop, s, e, onTick){
+  // aligned quarter chunks for caching; fall back to months if the API refuses a chunk
+  const chunks=[]; for(let t=quarterStart(s); t<=e; t=quarterEnd(t)+DAY) chunks.push([t, Math.min(quarterEnd(t), TODAY)]);
+  const total = {n:chunks.length, done:0}; onTick&&onTick(total);
+  const get = async (a,b) => {
+    const url = `${FARM}?StartDate=${rocDot(a)}&EndDate=${rocDot(b)}&Crop=${encodeURIComponent(crop)}&$top=50000`;
+    const j = await getJSON(url, ttlFor(b));
+    if(Array.isArray(j) && (j.length!==1 || j[0]['交易日期'])) return j;
+    mem.delete(url);
+    if(b-a <= 32*DAY) throw new Error('農業部 API 拒絕了這段資料查詢');
+    const parts=[]; for(let t=a; t<=b; t=monthEnd(t)+DAY) parts.push(get(t, Math.min(monthEnd(t), b)));
+    return (await Promise.all(parts)).flat();
+  };
+  const res = await Promise.all(chunks.map(([a,b])=>get(a,b).then(r=>{total.done++; onTick&&onTick(total); return r;})));
+  return res.flat();
+}
+
+function aggDaily(rows, keyFn, cityFn){
+  // rows: {t, avg, hi, lo, q, city}
+  const nat=new Map(), reg=new Map();
+  for(const r of rows){
+    if(!(r.q>0) || !(r.avg>0)) continue;
+    let a=nat.get(r.t); if(!a) nat.set(r.t,a={q:0,sa:0,qh:0,sh:0,ql:0,sl:0});
+    a.q+=r.q; a.sa+=r.avg*r.q;
+    if(r.hi>0){a.qh+=r.q; a.sh+=r.hi*r.q;} if(r.lo>0){a.ql+=r.q; a.sl+=r.lo*r.q;}
+    if(r.city){ let m=reg.get(r.city); if(!m) reg.set(r.city,m=new Map()); let b=m.get(r.t); if(!b) m.set(r.t,b={q:0,s:0}); b.q+=r.q; b.s+=r.avg*r.q; }
+  }
+  const ts=[...nat.keys()].sort((a,b)=>a-b);
+  const avg=ts.map(t=>[t,nat.get(t).sa/nat.get(t).q]);
+  const hi=ts.filter(t=>nat.get(t).qh).map(t=>[t,nat.get(t).sh/nat.get(t).qh]);
+  const lo=ts.filter(t=>nat.get(t).ql).map(t=>[t,nat.get(t).sl/nat.get(t).ql]);
+  const qty=ts.map(t=>[t,nat.get(t).q]);
+  const regions={};
+  for(const [c,m] of reg){ const k=[...m.keys()].sort((a,b)=>a-b); regions[c]={pts:k.map(t=>[t,m.get(t).s/m.get(t).q]), q:k.reduce((s,t)=>s+m.get(t).q,0)}; }
+  return {avg,hi,lo,qty,regions};
+}
+
+let retailP=null;
+function getRetail(){
+  if(!retailP) retailP = getJSON(BASE+'/service/opendata/agrstatUnit.aspx?item_code=CH1130&dimension_group_code_1=CH07&IsTransData=1&UnitId=615', 12*3600*1000).then(rows=>{
+    const m=new Map();
+    for(const r of rows){ const d=String(r.date||''); if(!/^\d{5}$/.test(d)) continue; const y=+d.slice(0,3)+1911, mo=+d.slice(3); let v=+r.value; if(!(v>0)) continue;
+      if(/台斤/.test(r.unit||'')) v=v/JIN; else if(/顆|個/.test(r.unit||'')) continue;
+      const k=r.dname1; if(!m.has(k)) m.set(k,[]); m.get(k).push([Date.UTC(y,mo-1,15), v]); }
+    for(const a of m.values()) a.sort((x,y)=>x[0]-y[0]);
+    return m;
+  }).catch(e=>{retailP=null; throw e;});
+  return retailP;
+}
+function retailSeries(names, map, s){
+  // returns series objects: monthly in range, or a reference line from the latest month if nothing falls in range
+  const out=[];
+  for(const n of names){ const pts=map.get(n); if(!pts||!pts.length) continue;
+    const inR=pts.filter(p=>p[0]>=s-20*DAY);
+    if(inR.length>=2) out.push({name:'零售 '+n+'（月）', pts:inR, monthly:true});
+    else { const last=pts[pts.length-1]; out.push({name:`零售 ${n}（${fmtYM(last[0])} 最新）`, pts:[last], ref:true, refT:last[0]}); }
+  }
+  return out;
+}
+
+async function loadFarm(item, s, e, onTick){
+  const raw = await fetchFarmRange(item.name, s, e, onTick);
+  const rows0 = raw.filter(r=>{ const n=r['作物名稱']; return n && n!=='休市' && (n===item.name || n.startsWith(item.name+'-')) && (r['種類代碼']==='N04'||r['種類代碼']==='N05'); });
+  const vq=new Map(); for(const r of rows0){ vq.set(r['作物名稱'],(vq.get(r['作物名稱'])||0)+(+r['交易量']||0)); }
+  const varieties=[...vq.entries()].sort((a,b)=>b[1]-a[1]).map(([n])=>n);
+  let sel = S.varSel && S.varSel.filter(v=>vq.has(v));
+  if(!sel || !sel.length){ const dom=varieties.filter(v=>!isImport(v)); sel = dom.length?dom:varieties; }
+  S.varSel = sel;
+  const selSet=new Set(sel);
+  const rows = rows0.filter(r=>selSet.has(r['作物名稱'])).map(r=>({t:parseRoc(r['交易日期']), avg:+r['平均價'], hi:+r['上價'], lo:+r['下價'], q:+r['交易量'], city:cityOf(r['市場名稱'],FARM_MARKET_CITY)})).filter(r=>r.t>=s && r.t<=e);
+  const a = aggDaily(rows);
+  // farm-gate (產地) price
+  let origin=null, originName='';
+  try{
+    const fg = await getJSON(`${BASE}/Service/OpenData/TransService.aspx?UnitId=WVOiWSdDjWxx&IsTransData=1&PRODUCTNAME=${encodeURIComponent(item.name)}&ORGNAME=${encodeURIComponent('當日平均價')}`, 3*3600*1000);
+    if(Array.isArray(fg)){
+      const strip=n=>String(n).split('(')[0].trim();
+      let cand=fg.filter(r=>strip(r.PRODUCTNAME)===item.name);
+      if(!cand.length) cand=fg.filter(r=>String(r.PRODUCTNAME).startsWith(item.name));
+      const byName=new Map(); for(const r of cand){ const t=Date.UTC(+r.YEAR,+r.MONTH-1,+r.PERIOD); const v=+r.AVGPRICE; if(!(t>=s&&t<=e)||!(v>0)) continue; if(!byName.has(r.PRODUCTNAME)) byName.set(r.PRODUCTNAME,[]); byName.get(r.PRODUCTNAME).push([t,v]); }
+      let best=null; for(const [n,p] of byName) if(!best||p.length>best[1].length) best=[n,p];
+      if(best){ originName=best[0]; origin=best[1].sort((x,y)=>x[0]-y[0]); }
+    }
+  }catch(err){ /* farm-gate optional */ }
+  const chans=[];
+  chans.push({key:'band', name:'批發 上價～下價', band:true, lo:a.lo, hi:a.hi});
+  chans.push({key:'whole', name:'批發均價', pts:a.avg, color:'--s1', width:2.25});
+  if(origin) chans.push({key:'origin', name:`產地價（${originName}）`, pts:origin, color:'--s2'});
+  chans.push({key:'hi', name:'批發上價', pts:a.hi, color:'--s7', dash:true, tableOnly:true});
+  chans.push({key:'lo', name:'批發下價', pts:a.lo, color:'--s3', dash:true, tableOnly:true});
+  return {main:{name:'批發均價', pts:a.avg}, mainLabel:'最新批發均價', chans, regions:a.regions, varieties, vq,
+    trendDesc:'全台各批發市場依交易量加權的每日均價（選取的品種）。',
+    chanDesc: origin ? '產地價為各地農會查報的全台平均；批發價為果菜市場拍賣價。零售與量販價格無公開即時資料。' : '這個品項沒有對應的產地價資料；陰影是批發上價到下價的區間。零售與量販價格無公開即時資料。',
+    regDesc:'各縣市果菜批發市場的加權均價，點城市可加入或移出圖表。', regionUnit:'市場'};
+}
+
+async function loadFish(item, s, e, onTick){
+  const chunks=[]; for(let t=monthStart(s); t<=e; t=monthEnd(t)+DAY) chunks.push([t, Math.min(monthEnd(t),TODAY)]);
+  const total={n:chunks.length,done:0}; onTick&&onTick(total); let truncated=false;
+  const get = async (a,b) => {
+    const url=`${BASE}/api/v1/FisheryProductsTransType/?Start_time=${rocCompact(a)}&End_time=${rocCompact(b)}&SeafoodProdName=${encodeURIComponent(item.name)}`;
+    const j = await getJSON(url, ttlFor(b));
+    if(j && j.Next && b-a>8*DAY){ const mid=a+Math.floor((b-a)/DAY/2)*DAY; return (await Promise.all([get(a,mid),get(mid+DAY,b)])).flat(); }
+    if(j && j.Next) truncated=true;
+    return (j && Array.isArray(j.Data)) ? j.Data : [];
+  };
+  const raw=(await Promise.all(chunks.map(([a,b])=>get(a,b).then(r=>{total.done++;onTick&&onTick(total);return r;})))).flat();
+  const rows=raw.filter(r=>r.SeafoodProdName===item.name).map(r=>({t:parseRoc(r.TransDate), avg:+r.Avg_Price, hi:+r.Upper_Price, lo:+r.Lower_Price, q:+r.Trans_Quantity, city:cityOf(r.MarketName,FISH_MARKET_CITY)})).filter(r=>r.t>=s&&r.t<=e);
+  const a=aggDaily(rows);
+  return {main:{name:'批發均價',pts:a.avg}, mainLabel:'最新批發均價', regions:a.regions,
+    chans:[{key:'band',name:'批發 上價～下價',band:true,lo:a.lo,hi:a.hi},{key:'whole',name:'批發均價',pts:a.avg,color:'--s1',width:2.25},{key:'hi',name:'批發上價',pts:a.hi,tableOnly:true},{key:'lo',name:'批發下價',pts:a.lo,tableOnly:true}],
+    trendDesc:'全台各魚市場依交易量加權的每日均價。', chanDesc:'魚市場拍賣的上價、均價、下價。漁產沒有公開的產地或零售即時價格。'+(truncated?' 部分日期資料量超過 API 單次上限，可能不完整。':''),
+    regDesc:'各縣市魚市場的加權均價，點城市可加入或移出圖表。', regionUnit:'魚市場'};
+}
+
+function porkDates(s,e,days){
+  const out=new Set();
+  if(days<=7){ for(let t=e;t>=s;t-=DAY) out.add(t); }
+  else if(days<=30){ for(let t=e;t>=s;t-=2*DAY) out.add(t); for(let i=0;i<3;i++) out.add(e-i*DAY); }
+  else { const step = days<=90?7:days<=180?14:28; const d=new Date(e).getUTCDay(); let w=e-((d-3+7)%7)*DAY; for(;w>=s;w-=step*DAY) out.add(w); for(let i=0;i<4;i++) out.add(e-i*DAY); }
+  return [...out].filter(t=>t>=s&&t<=TODAY).sort((a,b)=>a-b);
+}
+async function loadPork(item, s, e, onTick){
+  const dates=porkDates(s,e,S.days); const total={n:dates.length,done:0}; onTick&&onTick(total);
+  const res=await Promise.all(dates.map(t=>getJSON(`${BASE}/api/v1/PorkTransType/?TransDate=${rocCompact(t)}`, ttlFor(t)).then(j=>{total.done++;onTick&&onTick(total);return (j&&j.Data)||[];}).catch(()=>{total.done++;return [];})));
+  const rows=res.flat().map(r=>({t:parseRoc(r.TransDate), avg:+r.TransNum_AvgPrice, q:+r.TransNum_Total, city:cityOf(r.MarketName,{})})).filter(r=>r.t>=s&&r.t<=e);
+  const a=aggDaily(rows);
+  const chans=[{key:'whole',name:'毛豬拍賣均價（活體）',pts:a.avg,color:'--s1',width:2.25, maxGap: S.days<=30?4:40}];
+  try{ const m=await getRetail(); retailSeries(item.retailDefault,m,s).forEach((r,i)=>chans.push({key:'r'+i,...r,color:['--s2','--s5','--s4'][i]})); }catch(err){}
+  const sampled = S.days>7 ? '（為了速度，此範圍以抽樣日期繪製）' : '';
+  return {main:{name:'毛豬均價',pts:a.avg, maxGap:S.days<=30?4:40}, mainLabel:'最新毛豬拍賣均價', chans, regions:a.regions,
+    trendDesc:'全台肉品市場毛豬（活體）依成交頭數加權的拍賣均價'+sampled+'。',
+    chanDesc:'毛豬是活體重量價格，零售是部位肉（屠體分切）的都市零售月均價，兩者計價基礎不同，可看出各層價差。',
+    regDesc:'各縣市肉品市場的毛豬拍賣均價'+sampled+'，點城市可加入或移出圖表。', regionUnit:'肉品市場', maxGap:S.days<=30?4:40};
+}
+
+async function loadPoultry(item, s, e, onTick){
+  const total={n:1,done:0}; onTick&&onTick(total);
+  const j=await getJSON(`${BASE}/api/v1/${item.api}/?Start_time=${slash(s)}&End_time=${slash(e)}`, 2*3600*1000);
+  total.done=1; onTick&&onTick(total);
+  const data=(j&&j.Data)||[];
+  const val=(r,f)=>{ const v=parseFloat(r[f]); return v>0 ? v/JIN : null; }; // 元/台斤 → 元/公斤
+  // the API can return the same date more than once; average duplicates
+  const series=item.fields.map(([f,label])=>{ const m=new Map(); for(const r of data){ const t=parseSlash(r.TransDate), v=val(r,f); if(!t||v==null||t<s||t>e) continue; const a=m.get(t)||[0,0]; a[0]+=v; a[1]++; m.set(t,a); } return {f,label,pts:[...m.entries()].sort((a,b)=>a[0]-b[0]).map(([t,a])=>[t,a[0]/a[1]])}; });
+  let main;
+  if(item.main==='avgM'){ const ms=series.filter(x=>/_M$/.test(x.f)); const m=new Map(); ms.forEach(x=>x.pts.forEach(([t,v])=>{const a=m.get(t)||[0,0];a[0]+=v;a[1]++;m.set(t,a);})); main={name:'三區公雞平均',pts:[...m.entries()].sort((a,b)=>a[0]-b[0]).map(([t,a])=>[t,a[0]/a[1]])}; }
+  else main={name:series[item.main].label, pts:series[item.main].pts};
+  const colors=['--s2','--s1','--s3','--s7','--s4','--s6'];
+  const chans=[];
+  if(item.regions){ // only first-level lines on chart; others in table
+    series.forEach((x,i)=>chans.push({key:x.f,name:'產地 '+x.label,pts:x.pts,color:colors[i%6],tableOnly:!/_M$/.test(x.f)}));
+  } else series.forEach((x,i)=>chans.push({key:x.f,name:x.label,pts:x.pts,color:colors[i%6], width:i===item.main?2.25:1.75}));
+  try{ const m=await getRetail(); retailSeries(item.retailDefault,m,s).forEach((r,i)=>chans.push({key:'r'+i,...r,color:['--s5','--s8'][i]})); }catch(err){}
+  let regions=null;
+  if(item.regions){ regions={}; for(const [rg,fs] of Object.entries(item.regions)){ const m=new Map(); series.filter(x=>fs.includes(x.f)).forEach(x=>x.pts.forEach(([t,v])=>{const a=m.get(t)||[0,0];a[0]+=v;a[1]++;m.set(t,a);})); regions[rg]={pts:[...m.entries()].sort((a,b)=>a[0]-b[0]).map(([t,a])=>[t,a[0]/a[1]]),q:1}; } }
+  return {main, mainLabel:'最新'+main.name, chans, regions,
+    trendDesc:`${main.name}的每日行情（原始報價為元/台斤）。`,
+    chanDesc:'產地、批發、門市等各層報價'+(item.note?'；'+item.note:'。')+' 零售為都市零售月均價。',
+    regDesc: item.regions ? '北、中、南區產地價（公母平均）。' : '', regionUnit:'產區'};
+}
+
+async function loadRetailOnly(item, s, e, onTick){
+  const total={n:1,done:0}; onTick&&onTick(total);
+  const m=await getRetail(); total.done=1; onTick&&onTick(total);
+  const s2=Math.min(s, TODAY-730*DAY);
+  const pts=(m.get(item.retail[0])||[]).filter(p=>p[0]>=s2);
+  return {main:{name:'零售月均價',pts,monthly:true}, mainLabel:'最新零售月均價', monthlyOnly:true,
+    chans:[{key:'r0',name:'零售 '+item.retail[0]+'（月）',pts,color:'--s5',monthly:true}], regions:null,
+    trendDesc:'都市零售月均價。這個品項沒有每日批發資料，因此固定顯示近兩年月資料。', chanDesc:'只有零售層的公開資料。', regDesc:''};
+}
+
+/* ---------------- chart ---------------- */
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#888';
+function niceTicks(min,max,n=4){
+  if(!(max>min)){ max=min+1; min=Math.max(0,min-1); }
+  const span=max-min, step0=span/n, mag=Math.pow(10,Math.floor(Math.log10(step0))), err=step0/mag;
+  const step=(err>=7.5?10:err>=3.5?5:err>=1.5?2:1)*mag;
+  const lo=Math.floor(min/step)*step, hi=Math.ceil(max/step)*step; const t=[]; for(let v=lo; v<=hi+step/2; v+=step) t.push(+v.toFixed(6)); return t;
+}
+function drawChart(host, cfg){
+  host._cfg=cfg; const W=Math.max(280, host.clientWidth||600); const H=W<520?220:260;
+  const m={l:44,r:14,t:12,b:26}; const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const ser=cfg.series.filter(x=>x.pts&&x.pts.length);
+  const all=[]; ser.forEach(x=>x.pts.forEach(p=>all.push(conv(p[1]))));
+  if(cfg.band){ cfg.band.lo.forEach(p=>all.push(conv(p[1]))); cfg.band.hi.forEach(p=>all.push(conv(p[1]))); }
+  if(!all.length){ host.innerHTML='<div class="loading">這段期間沒有交易資料。可以試試較長的時間範圍或其他品種。</div>'; return; }
+  let [x0,x1]=cfg.x; if(x1<=x0) x1=x0+DAY;
+  let ymin=Math.min(...all), ymax=Math.max(...all); const pd=(ymax-ymin)*0.08||ymax*0.1||1; ymin=Math.max(0,ymin-pd); ymax+=pd;
+  const yt=niceTicks(ymin,ymax,4); ymin=yt[0]; ymax=yt[yt.length-1];
+  const X=t=>m.l+(t-x0)/(x1-x0)*iw, Y=v=>m.t+ih-(v-ymin)/(ymax-ymin)*ih;
+  const span=(x1-x0)/DAY; const nX=W<520?4:6; const xt=[];
+  if(span>200){ const ms=[]; for(let t=monthStart(x0); t<=x1; t=monthEnd(t)+DAY){ if(t>=x0) ms.push(t);} const k=Math.ceil(ms.length/nX); ms.forEach((t,i)=>{ if(i%k===0) xt.push(t); }); }
+  else { const st=Math.max(1,Math.round(span/nX)); for(let t=x1; t>=x0; t-=st*DAY) xt.unshift(t); }
+  const fx = span>200 ? fmtYM : fmtMD;
+  const path=(pts,gap)=>{ let d=''; let prev=null; for(const [t,v0] of pts){ const v=conv(v0); if(v==null) {prev=null;continue;} const cmd=(prev==null|| (t-prev)>gap*DAY)?'M':'L'; d+=`${cmd}${X(t).toFixed(1)},${Y(v).toFixed(1)}`; prev=t; } return d; };
+  let svg=`<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(cfg.label||'價格走勢圖')}"><g class="grid">`;
+  yt.forEach(v=>svg+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}"/>`);
+  svg+=`</g><g class="axis">`;
+  yt.forEach(v=>svg+=`<text x="${m.l-8}" y="${Y(v)+4}" text-anchor="end">${v>=1000?v.toFixed(0):+v.toFixed(1)}</text>`);
+  xt.forEach(t=>svg+=`<text x="${X(t)}" y="${H-6}" text-anchor="middle">${fx(t)}</text>`);
+  svg+=`</g>`;
+  if(cfg.band && cfg.band.hi.length>1){
+    const hiM=new Map(cfg.band.hi), loM=new Map(cfg.band.lo); const ts=[...hiM.keys()].filter(t=>loM.has(t)).sort((a,b)=>a-b);
+    // split band into segments at gaps
+    let seg=[]; const segs=[]; ts.forEach((t,i)=>{ if(i&&t-ts[i-1]>(cfg.gap||4)*DAY){segs.push(seg);seg=[];} seg.push(t);}); segs.push(seg);
+    segs.filter(g=>g.length>1).forEach(g=>{ const up=g.map(t=>`${X(t).toFixed(1)},${Y(conv(hiM.get(t))).toFixed(1)}`); const dn=g.slice().reverse().map(t=>`${X(t).toFixed(1)},${Y(conv(loM.get(t))).toFixed(1)}`); svg+=`<path d="M${up.join('L')}L${dn.join('L')}Z" fill="var(--band)" stroke="none"/>`; });
+  }
+  const surface=cssVar('--surface');
+  ser.forEach(x=>{
+    const col=`var(${x.color||'--s1'})`;
+    if(x.ref){ const v=conv(x.pts[0][1]); svg+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${col}" stroke-width="1.75" stroke-dasharray="6 5"/>`; return; }
+    const gap = x.monthly?45 : (x.maxGap||cfg.gap||6);
+    svg+=`<path d="${path(x.pts,gap)}" fill="none" stroke="${col}" stroke-width="${x.width||1.75}" stroke-linejoin="round" stroke-linecap="round" ${x.dash?'stroke-dasharray="5 4"':''}/>`;
+    if(x.area && ser.length===1){ /* area handled below */ }
+    const last=x.pts[x.pts.length-1]; const lv=conv(last[1]); if(lv!=null) svg+=`<circle cx="${X(last[0])}" cy="${Y(lv)}" r="3.75" fill="${col}" stroke="${surface}" stroke-width="2"/>`;
+    if(x.monthly) x.pts.forEach(p=>{ const v=conv(p[1]); if(v!=null) svg+=`<circle cx="${X(p[0])}" cy="${Y(v)}" r="2.5" fill="${col}"/>`; });
+  });
+  if(ser.length && ser[0].area){ const p=ser[0].pts.filter(q=>q[1]!=null); if(p.length>1){ svg=svg.replace('<g class="grid">',`<path d="M${X(p[0][0])},${Y(ymin)}${p.map(q=>`L${X(q[0]).toFixed(1)},${Y(conv(q[1])).toFixed(1)}`).join('')}L${X(p[p.length-1][0])},${Y(ymin)}Z" fill="var(--band)"/><g class="grid">`);} }
+  svg+=`<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${m.t+ih}" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/><g class="dots"></g>`;
+  svg+=`<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" class="hit"/></svg><div class="tip" hidden></div>`;
+  host.innerHTML=svg;
+  // hover
+  const tsAll=[...new Set(ser.filter(x=>!x.ref).flatMap(x=>x.pts.map(p=>p[0])).concat(cfg.band?cfg.band.hi.map(p=>p[0]):[]))].sort((a,b)=>a-b);
+  const svgEl=host.querySelector('svg'), tip=host.querySelector('.tip'), xh=host.querySelector('.xh'), dots=host.querySelector('.dots');
+  const valAt=(x,t)=>{ if(x.ref) return x.pts[0][1]; if(x.monthly){ const [y,mo]=ymd(t); const p=x.pts.find(q=>{const [y2,m2]=ymd(q[0]);return y2===y&&m2===mo;}); return p?p[1]:null; } const p=x.pts.find(q=>q[0]===t); return p?p[1]:null; };
+  const move=ev=>{
+    if(!tsAll.length) return;
+    const r=svgEl.getBoundingClientRect(); const px=(ev.clientX-r.left)*(W/r.width); const t0=x0+(px-m.l)/iw*(x1-x0);
+    let best=tsAll[0]; for(const t of tsAll) if(Math.abs(t-t0)<Math.abs(best-t0)) best=t;
+    const xx=X(best); xh.setAttribute('x1',xx); xh.setAttribute('x2',xx); xh.setAttribute('visibility','visible');
+    let rows='', dd='';
+    if(cfg.band){ const h=cfg.band.hi.find(p=>p[0]===best), l=cfg.band.lo.find(p=>p[0]===best); if(h&&l) rows+=`<div class="r"><span><i style="background:var(--band);outline:1px solid var(--s1)"></i>上價～下價</span><b>${fmtP(l[1])}～${fmtP(h[1])}</b></div>`; }
+    ser.forEach(x=>{ const v=valAt(x,best); if(v==null) return; rows+=`<div class="r"><span><i style="background:var(${x.color||'--s1'})"></i>${esc(x.short||x.name)}</span><b>${fmtP(v)}</b></div>`; if(!x.ref) dd+=`<circle cx="${xx}" cy="${Y(conv(v))}" r="4" fill="var(${x.color||'--s1'})" stroke="${surface}" stroke-width="2"/>`; });
+    dots.innerHTML=dd;
+    tip.innerHTML=`<div class="d">${fmtFull(best)}・${unitLabel()}</div>${rows||'<div class="r">當天無交易</div>'}`; tip.hidden=false;
+    const hw=host.clientWidth; const tw=tip.offsetWidth; let left=(xx/W)*hw+14; if(left+tw>hw) left=(xx/W)*hw-tw-14; tip.style.left=Math.max(0,left)+'px'; tip.style.top='6px';
+  };
+  const leave=()=>{ tip.hidden=true; xh.setAttribute('visibility','hidden'); dots.innerHTML=''; };
+  const hit=host.querySelector('.hit'); hit.addEventListener('pointermove',move); hit.addEventListener('pointerdown',move); hit.addEventListener('pointerleave',leave);
+}
+const ro = new ResizeObserver(es=>es.forEach(e=>{ const h=e.target; if(h._cfg && Math.abs((h._w||0)-h.clientWidth)>4){ h._w=h.clientWidth; drawChart(h,h._cfg);} }));
+['trendChart','chanChart','regChart'].forEach(id=>ro.observe($(id)));
+function legend(el, items){ el.innerHTML=items.map(x=>x.band?`<span><i class="band" style="background:var(--band)"></i>${esc(x.name)}</span>`:`<span style="color:var(${x.color||'--s1'})"><i class="${x.dash||x.ref?'dash':''}" style="background:var(${x.color||'--s1'})"></i><span style="color:var(--ink-2)">${esc(x.name)}</span></span>`).join(''); }
+function loadingHTML(msg,p){ return `<div class="loading"><div>${esc(msg)}</div><div class="bar"><i style="width:${Math.round((p||0)*100)}%"></i></div></div>`; }
+
+/* ---------------- stats helpers ---------------- */
+function lastPt(pts){ return pts&&pts.length?pts[pts.length-1]:null; }
+function ptBefore(pts,t){ let r=null; for(const p of pts){ if(p[0]<=t) r=p; else break; } return r; }
+function meanOf(pts){ const v=pts.map(p=>p[1]).filter(x=>x>0); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; }
+function movingAvg(pts,days){ return pts.map(([t])=>{ const w=pts.filter(q=>q[0]>t-days*DAY&&q[0]<=t); return [t, w.reduce((a,q)=>a+q[1],0)/w.length]; }); }
+
+/* ---------------- render detail ---------------- */
+function itemKey(it){ return it.kind+':'+(it.id||it.name); }
+async function selectItem(it, keepVar){
+  if(!keepVar) S.varSel=null;
+  S.item=it; save(); renderBoard();
+  $('itemName').textContent=it.name; $('itemCat').textContent=it.cat||''; $('itemPill').innerHTML='';
+  document.title = it.name+'｜台灣菜價通';
+  await refresh();
+}
+async function refresh(){
+  const it=S.item; if(!it) return; const tok=++S.token;
+  const e=TODAY, s=TODAY-(S.days-1)*DAY;
+  $('stats').innerHTML=''; $('varieties').hidden=true;
+  ['trendChart','chanChart','regChart'].forEach(id=>{ $(id)._cfg=null; $(id).innerHTML=loadingHTML('正在向農業部讀取資料…',0); });
+  ['trendLegend','chanLegend','regLegend','chanTable','regTable','cityChips'].forEach(id=>$(id).innerHTML='');
+  const onTick=tt=>{ if(tok!==S.token) return; const msg=`讀取中 ${tt.done}/${tt.n} 批資料（農業部伺服器較慢，請稍候）`; ['trendChart','chanChart','regChart'].forEach(id=>{ if(!$(id)._cfg) $(id).innerHTML=loadingHTML(msg,tt.n?tt.done/tt.n:0); }); };
+  let d;
+  try{
+    const L={farm:loadFarm,fish:loadFish,pork:loadPork,poultry:loadPoultry,retail:loadRetailOnly}[it.kind];
+    d=await L(it,s,e,onTick);
+  }catch(err){
+    if(tok!==S.token) return;
+    const msg=`<div class="err">讀不到資料：${esc(err.message||err)}。可能是農業部伺服器暫時沒有回應，請稍後重新整理，或換一個時間範圍。</div>`;
+    ['trendChart','chanChart','regChart'].forEach(id=>$(id).innerHTML=msg); return;
+  }
+  if(tok!==S.token) return;
+  S.last={d,s,e}; renderDetail();
+}
+function renderDetail(){
+  if(!S.last) return; const {d,s,e}=S.last; const it=S.item;
+  const xr = d.monthlyOnly ? [Math.min(...d.main.pts.map(p=>p[0]).concat([s])), e] : [s,e];
+  // varieties
+  const vb=$('varieties');
+  if(d.varieties && d.varieties.length>1){
+    vb.hidden=false; const sel=new Set(S.varSel);
+    vb.innerHTML='<span class="note" style="align-self:center">品種：</span>'+d.varieties.map(v=>`<button type="button" class="chip" data-var="${esc(v)}" aria-pressed="${sel.has(v)}">${esc(v.replace(it.name+'-','')||v)}</button>`).join('');
+  } else vb.hidden=true;
+  // stats
+  const pts=d.main.pts; const L=lastPt(pts); const P=pts.length>1?pts[pts.length-2]:null; let W=L?ptBefore(pts,L[0]-7*DAY):null; if(W&&W[0]<L[0]-11*DAY) W=null;
+  const inR=pts.filter(p=>p[0]>=xr[0]); const avg=meanOf(inR);
+  const hi=inR.length?inR.reduce((a,b)=>b[1]>a[1]?b:a):null, lo=inR.length?inR.reduce((a,b)=>b[1]<a[1]?b:a):null;
+  const dPrev=L&&P?pct(L[1],P[1]):null, d7=L&&W?pct(L[1],W[1]):null, dAvg=L?pct(L[1],avg):null;
+  const cls=p=>p==null?'':(Math.abs(p)<0.5?'':(p>0?'up':'down'));
+  const sgn=p=>p==null?'—':(p>0?'+':'')+p.toFixed(1)+'%';
+  const rangeName={7:'7天',30:'1個月',90:'3個月',180:'6個月',365:'1年'}[S.days];
+  $('stats').innerHTML = L ? `
+    <div class="stat"><span class="k">${esc(d.mainLabel)}</span><span class="v big">${fmtP(L[1])}</span><span class="s">${unitLabel()}・${d.monthlyOnly?fmtYM(L[0]):fmtFull(L[0])}</span></div>
+    <div class="stat"><span class="k">${d.monthlyOnly?'較上月':'較前一交易日'}</span><span class="v ${cls(dPrev)}">${sgn(dPrev)}</span><span class="s">${P?(d.monthlyOnly?fmtYM(P[0]):fmtFull(P[0]))+' '+fmtP(P[1]):'—'}</span></div>
+    <div class="stat"><span class="k">${d.monthlyOnly?'較期間平均':'較 7 天前'}</span><span class="v ${cls(d.monthlyOnly?dAvg:d7)}">${sgn(d.monthlyOnly?dAvg:d7)}</span><span class="s">${d.monthlyOnly?'平均 '+fmtP(avg):(W?fmtFull(W[0])+' '+fmtP(W[1]):'資料不足')}</span></div>
+    <div class="stat"><span class="k">${d.monthlyOnly?'近兩年':rangeName}高 / 低</span><span class="v" style="font-size:18px">${hi?fmtP(hi[1]):'—'} / ${lo?fmtP(lo[1]):'—'}</span><span class="s">均價 ${fmtP(avg)}</span></div>` : `<div class="stat" style="grid-column:1/-1"><span class="k">這段期間沒有交易資料</span><span class="s">可能是休市或品項名稱不同，試試較長的時間範圍。</span></div>`;
+  // pill
+  if(dAvg!=null && !d.monthlyOnly){ const c=Math.abs(dAvg)<3?'flat':(dAvg>0?'up':'down'); const txt=c==='flat'?`接近${rangeName}均價`:`比${rangeName}均價${dAvg>0?'高':'低'} ${Math.abs(dAvg).toFixed(0)}%`; $('itemPill').innerHTML=`<span class="pill ${c}">${c==='up'?'▲ ':c==='down'?'▼ ':''}${txt}</span>`; } else $('itemPill').innerHTML='';
+  // trend
+  $('trendDesc').textContent=d.trendDesc;
+  const tser=[{name:d.main.name,pts,color:'--s1',width:2.25,area:true,monthly:d.main.monthly,maxGap:d.main.maxGap}];
+  if(S.ma7 && !d.monthlyOnly && pts.length>3) tser.push({name:'7日均線',pts:movingAvg(pts,7),color:'--s2',dash:true,maxGap:d.main.maxGap});
+  drawChart($('trendChart'),{series:tser,x:xr,gap:6,label:it.name+'價格趨勢'}); $('trendChart')._w=$('trendChart').clientWidth;
+  legend($('trendLegend'), tser.length>1?tser:[]);
+  // channels
+  $('chanDesc').textContent=d.chanDesc;
+  const band=d.chans.find(c=>c.band); const cser=d.chans.filter(c=>!c.band&&!c.tableOnly&&c.pts&&c.pts.length);
+  drawChart($('chanChart'),{series:cser,band:band&&band.hi&&band.hi.length?{lo:band.lo,hi:band.hi}:null,x:xr,gap:d.maxGap||6,label:it.name+'通路比價'}); $('chanChart')._w=$('chanChart').clientWidth;
+  legend($('chanLegend'), (band&&band.hi&&band.hi.length?[band]:[]).concat(cser));
+  const origin=d.chans.find(c=>c.key==='origin'); const oAvg=origin?meanOf(origin.pts):null;
+  const trows=d.chans.filter(c=>!c.band&&c.pts&&c.pts.length).map(c=>{ const l=lastPt(c.pts); const a=c.ref?c.pts[0][1]:meanOf(c.pts.filter(p=>p[0]>=xr[0]-20*DAY)); return {c,l,a}; });
+  const maxA=Math.max(...trows.map(r=>r.a||0),1);
+  $('chanTable').innerHTML = trows.length ? `<table><thead><tr><th>通路／報價</th><th class="n">最新</th><th>日期</th><th class="n">期間均價</th><th class="n">${oAvg?'相對產地':'相對'+esc(d.main.name)}</th></tr></thead><tbody>${trows.map(({c,l,a})=>{ const baseA = oAvg || meanOf(d.main.pts.filter(p=>p[0]>=xr[0])); const rel = a&&baseA? (a/baseA) : null; return `<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><i style="width:10px;height:10px;border-radius:3px;background:var(${c.color||'--ink-3'})"></i>${esc(c.name)}</span></td><td class="n">${fmtP(l&&l[1])}</td><td class="note">${l?(c.monthly||c.ref?fmtYM(l[0]):fmtMD(l[0])):'—'}</td><td class="n"><span class="mini" style="width:${Math.round((a||0)/maxA*48)}px"></span> ${fmtP(a)}</td><td class="n">${rel?rel.toFixed(2)+'×':'—'}</td></tr>`; }).join('')}</tbody></table><div class="note" style="margin-top:6px">單位：${unitLabel()}。期間均價為所選時間範圍內有交易日的平均。</div>` : '';
+  // regions
+  renderRegions();
+}
+function renderRegions(){
+  const {d,s,e}=S.last; const it=S.item;
+  const regs=d.regions; const host=$('regChart');
+  if(!regs || !Object.keys(regs).length){
+    $('cityChips').innerHTML=''; $('regTable').innerHTML=''; $('regLegend').innerHTML=''; host._cfg=null;
+    $('regDesc').textContent='';
+    host.innerHTML=`<div class="loading">${it.kind==='poultry'||it.kind==='retail'?'這個品項的公開資料只有全國或單一產區的報價，沒有分縣市價格。':'這段期間沒有分地區的交易資料。'}</div>`; return;
+  }
+  $('regDesc').textContent=d.regDesc;
+  const avail=Object.keys(regs).sort((a,b)=>{ const ia=CITY_ORDER.indexOf(a), ib=CITY_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
+  let sel=S.cities.filter(c=>avail.includes(c));
+  if(!sel.length){ sel=DEFAULT_CITIES.filter(c=>avail.includes(c)); if(sel.length<2) sel=avail.slice().sort((a,b)=>regs[b].q-regs[a].q).slice(0,5); }
+  sel=sel.slice(0,8);
+  const colorOf=c=>`--s${sel.indexOf(c)+1}`;
+  $('cityChips').innerHTML=avail.map(c=>`<button type="button" class="chip" data-city="${esc(c)}" aria-pressed="${sel.includes(c)}">${sel.includes(c)?`<span class="sw" style="background:var(${colorOf(c)})"></span>`:''}${esc(c)}</button>`).join('');
+  const rser=sel.map(c=>({name:c,pts:regs[c].pts,color:colorOf(c),maxGap:d.maxGap}));
+  drawChart(host,{series:rser,x:[s,e],gap:d.maxGap||6,label:it.name+'地區比較'}); host._w=host.clientWidth;
+  legend($('regLegend'),rser);
+  const natAvg=meanOf(d.main.pts);
+  const rows=avail.map(c=>{ const p=regs[c].pts; return {c,l:lastPt(p),a:meanOf(p)}; }).filter(r=>r.a).sort((a,b)=>a.a-b.a);
+  const maxA=Math.max(...rows.map(r=>r.a),1);
+  $('regTable').innerHTML=`<table><thead><tr><th>城市（由便宜到貴）</th><th class="n">最新</th><th>日期</th><th class="n">期間均價</th><th class="n">與全台均價比</th></tr></thead><tbody>${rows.map(r=>{ const p=pct(r.a,natAvg); const on=sel.includes(r.c); return `<tr class="click ${on?'':'off'}" data-city="${esc(r.c)}"><td>${on?`<i style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;background:var(${colorOf(r.c)})"></i>`:'<i style="display:inline-block;width:10px;margin-right:8px"></i>'}${esc(r.c)}</td><td class="n">${fmtP(r.l&&r.l[1])}</td><td class="note">${r.l?fmtMD(r.l[0]):'—'}</td><td class="n"><span class="mini" style="width:${Math.round(r.a/maxA*48)}px"></span> ${fmtP(r.a)}</td><td class="n">${chgHTML(p)}</td></tr>`; }).join('')}</tbody></table><div class="note" style="margin-top:6px">單位：${unitLabel()}。地區價格反映當地批發市場，不代表該縣市所有零售店。</div>`;
+  S._selCities=sel;
+}
+function toggleCity(c){
+  let sel=(S._selCities||[]).slice(); if(sel.includes(c)) sel=sel.filter(x=>x!==c); else { if(sel.length>=8) return; sel.push(c); }
+  S.cities=sel; save(); renderRegions();
+}
+
+/* ---------------- board ---------------- */
+async function loadBoard(){
+  try{
+    // one request per day (each day is ~3,500 rows; the API refuses very large single queries)
+    const days=[0,1,2,3,4].map(i=>TODAY-i*DAY);
+    const res=await Promise.all(days.map(t=>getJSON(`${FARM}?StartDate=${rocDot(t)}&EndDate=${rocDot(t)}&$top=20000`, t<TODAY-DAY?Infinity:3600*1000).catch(()=>[])));
+    const j=res.flat();
+    if(!j.length) throw new Error('no data');
+    const rows=(Array.isArray(j)?j:[]).filter(r=>r['作物名稱']&&r['作物名稱']!=='休市'&&(r['種類代碼']==='N04'||r['種類代碼']==='N05'));
+    const dates=[...new Set(rows.map(r=>parseRoc(r['交易日期'])))].filter(Boolean).sort((a,b)=>b-a);
+    // a trading day needs a reasonable number of markets reporting
+    const good=dates.filter(t=>new Set(rows.filter(r=>parseRoc(r['交易日期'])===t).map(r=>r['市場名稱'])).size>=5);
+    const dLast=good[0], dPrev=good[1];
+    const agg=new Map();
+    for(const r of rows){ const t=parseRoc(r['交易日期']); if(t!==dLast&&t!==dPrev) continue; const n=r['作物名稱']; const b=baseName(n); const imp=isImport(n);
+      let a=agg.get(b); if(!a) agg.set(b,a={name:b,cat:r['種類代碼']==='N04'?'蔬菜':'水果',d:{},imp:{}});
+      const box=imp?a.imp:a.d; const k=t===dLast?'L':'P'; box[k]=box[k]||{q:0,s:0}; box[k].q+=+r['交易量']||0; box[k].s+=(+r['平均價']||0)*(+r['交易量']||0);
+      S.farmCatalog.set(b,{name:b,cat:a.cat,kind:'farm'}); }
+    const list=[...agg.values()].map(a=>{ const box=(a.d.L&&a.d.L.q)?a.d:a.imp; const L=box.L&&box.L.q?box.L.s/box.L.q:null, P=box.P&&box.P.q?box.P.s/box.P.q:null; return {name:a.name,cat:a.cat,kind:'farm',price:L,chg:pct(L,P),vol:box.L?box.L.q:0}; }).filter(x=>x.price>0);
+    S.board={list,dLast,dPrev};
+    $('boardDate').textContent = dLast ? `${fmtFull(dLast)}${dPrev?' 對比 '+fmtMD(dPrev):''}` : '暫無資料';
+  }catch(err){ S.board={list:[],err:true}; $('boardDate').textContent='讀取失敗'; }
+  renderBoard();
+}
+function renderBoard(){
+  const el=$('blist'); const cat=S.boardCat; const cur=S.item?itemKey(S.item):'';
+  if(cat==='漁產'){
+    el.innerHTML=FISH_NAMES.map(n=>`<button type="button" class="brow" data-kind="fish" data-name="${esc(n)}" aria-current="${cur==='fish:'+n}"><span class="nm">${esc(n)}</span><span class="pr note">看行情</span><span></span></button>`).join('')+'<div class="empty">漁產按名稱查詢，點選後讀取全台魚市場行情。</div>'; return;
+  }
+  if(cat==='肉蛋'){
+    el.innerHTML=MEAT.map(m=>`<button type="button" class="brow" data-kind="${m.kind}" data-id="${m.id}" aria-current="${cur===m.kind+':'+m.id}"><span class="nm">${esc(m.name)}<small>${esc(m.cat)}</small></span><span class="pr note">看行情</span><span></span></button>`).join(''); return;
+  }
+  if(!S.board){ el.innerHTML='<div class="empty">正在讀取全台批發市場最新交易資料（約 10–20 秒）…</div>'; return; }
+  if(S.board.err){ el.innerHTML='<div class="empty">讀不到最新行情。農業部伺服器可能暫時沒有回應，請稍後重新整理。仍可直接用上方搜尋查詢。</div>'; return; }
+  let list=S.board.list.filter(x=>x.cat===cat);
+  const sorters={vol:(a,b)=>b.vol-a.vol, up:(a,b)=>(b.chg??-1e9)-(a.chg??-1e9), down:(a,b)=>(a.chg??1e9)-(b.chg??1e9), cheap:(a,b)=>a.price-b.price};
+  list.sort(sorters[S.boardSort]);
+  el.innerHTML=list.map(x=>`<button type="button" class="brow" data-kind="farm" data-name="${esc(x.name)}" aria-current="${cur==='farm:'+x.name}"><span class="nm">${esc(x.name)}<small>${Math.round(x.vol/1000).toLocaleString()} 公噸</small></span><span class="pr num">${fmtP(x.price)}</span>${chgHTML(x.chg)}</button>`).join('') || '<div class="empty">沒有資料</div>';
+}
+
+/* ---------------- search ---------------- */
+function catalog(){
+  const out=[]; const seen=new Set();
+  const add=x=>{ const k=x.kind+':'+(x.id||x.name); if(seen.has(k)) return; seen.add(k); out.push(x); };
+  for(const x of S.farmCatalog.values()) add(x);
+  COMMON_FARM.forEach(n=>add({name:n,cat:'蔬果',kind:'farm'}));
+  FISH_NAMES.forEach(n=>add({name:n,cat:'漁產',kind:'fish'}));
+  MEAT.forEach(m=>add(m));
+  return out;
+}
+let suggIdx=-1, suggList=[];
+function doSuggest(){
+  const q=$('q').value.trim(); const box=$('sugg');
+  if(!q){ box.hidden=true; $('searchBox').setAttribute('aria-expanded','false'); return; }
+  const terms=[q]; for(const [k,v] of Object.entries(ALIASES)) if(k.includes(q)||q.includes(k)) terms.push(v);
+  const cat=catalog(); const score=x=>{ const n=x.name; let s=0; for(const t of terms){ if(n===t) s=Math.max(s,100); else if(n.startsWith(t)) s=Math.max(s,60); else if(n.includes(t)) s=Math.max(s,40); else if(t.length>1&&t.includes(n)) s=Math.max(s,20); } return s; };
+  suggList=cat.map(x=>[x,score(x)]).filter(a=>a[1]>0).sort((a,b)=>b[1]-a[1]||a[0].name.length-b[0].name.length).slice(0,12).map(a=>a[0]);
+  const extra = suggList.length ? '' : `<div class="hint">找不到「${esc(q)}」。按 Enter 直接查詢果菜批發資料。</div>`;
+  box.innerHTML=suggList.map((x,i)=>`<button type="button" role="option" data-i="${i}" aria-selected="${i===suggIdx}"><span class="tag">${esc(x.cat||'')}</span><span>${esc(x.name)}</span>${ALIASES[q]===x.name?`<span class="note">（${esc(q)}）</span>`:''}</button>`).join('')+extra;
+  box.hidden=false; $('searchBox').setAttribute('aria-expanded','true');
+}
+function pickSuggest(i){ const x=suggList[i]; if(!x) return; $('q').value=''; $('sugg').hidden=true; S.boardCat = x.kind==='farm'?(x.cat==='水果'?'水果':'蔬菜'):x.kind==='fish'?'漁產':'肉蛋'; syncSeg('boardCat','cat',S.boardCat); selectItem(x); }
+$('q').addEventListener('input',()=>{suggIdx=-1;doSuggest();});
+$('q').addEventListener('keydown',ev=>{
+  if(ev.key==='ArrowDown'){ suggIdx=Math.min(suggList.length-1,suggIdx+1); doSuggest(); ev.preventDefault(); }
+  else if(ev.key==='ArrowUp'){ suggIdx=Math.max(0,suggIdx-1); doSuggest(); ev.preventDefault(); }
+  else if(ev.key==='Enter'){ ev.preventDefault(); if(suggList.length) pickSuggest(Math.max(0,suggIdx)); else { const q=$('q').value.trim(); if(q){ $('sugg').hidden=true; $('q').value=''; selectItem({name:ALIASES[q]||q,cat:'蔬果',kind:'farm'}); } } }
+  else if(ev.key==='Escape'){ $('sugg').hidden=true; }
+});
+$('sugg').addEventListener('click',ev=>{ const b=ev.target.closest('button[data-i]'); if(b) pickSuggest(+b.dataset.i); });
+document.addEventListener('click',ev=>{ if(!ev.target.closest('.search')) $('sugg').hidden=true; });
+
+/* ---------------- controls ---------------- */
+function syncSeg(id,attr,val){ document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset[attr]===String(val)))); }
+document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ S.unit=b.dataset.unit; document.querySelectorAll('[data-unit]').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); save(); renderBoard(); renderDetail(); }));
+$('ranges').addEventListener('click',ev=>{ const b=ev.target.closest('button[data-days]'); if(!b) return; S.days=+b.dataset.days; syncSeg('ranges','days',S.days); save(); refresh(); });
+$('boardCat').addEventListener('click',ev=>{ const b=ev.target.closest('button[data-cat]'); if(!b) return; S.boardCat=b.dataset.cat; syncSeg('boardCat','cat',S.boardCat); $('boardSort').disabled = !(S.boardCat==='蔬菜'||S.boardCat==='水果'); renderBoard(); });
+$('boardSort').addEventListener('change',ev=>{ S.boardSort=ev.target.value; renderBoard(); });
+$('blist').addEventListener('click',ev=>{ const b=ev.target.closest('.brow'); if(!b) return; const k=b.dataset.kind;
+  if(k==='farm') selectItem(S.farmCatalog.get(b.dataset.name)||{name:b.dataset.name,cat:S.boardCat,kind:'farm'});
+  else if(k==='fish') selectItem({name:b.dataset.name,cat:'漁產',kind:'fish'});
+  else selectItem(MEAT.find(m=>m.id===b.dataset.id));
+  if(matchMedia('(max-width:960px)').matches) $('detail').scrollIntoView({behavior:'smooth'});
+});
+$('varieties').addEventListener('click',ev=>{ const b=ev.target.closest('[data-var]'); if(!b) return; const v=b.dataset.var; let sel=(S.varSel||[]).slice(); sel=sel.includes(v)?sel.filter(x=>x!==v):sel.concat(v); if(!sel.length) return; S.varSel=sel; refresh(); });
+$('cityChips').addEventListener('click',ev=>{ const b=ev.target.closest('[data-city]'); if(b) toggleCity(b.dataset.city); });
+$('regTable').addEventListener('click',ev=>{ const r=ev.target.closest('tr[data-city]'); if(r) toggleCity(r.dataset.city); });
+$('ma7').addEventListener('change',ev=>{ S.ma7=ev.target.checked; renderDetail(); });
+const mq=matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener&&mq.addEventListener('change',()=>renderDetail());
+
+/* ---------------- boot ---------------- */
+syncSeg('ranges','days',S.days);
+document.querySelectorAll('[data-unit]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.unit===S.unit)));
+let start = {name:'甘藍',cat:'蔬菜',kind:'farm'};
+if(S.savedItem){ const si=S.savedItem; start = si.id ? (MEAT.find(m=>m.id===si.id)||start) : {name:si.name,cat:si.cat,kind:si.kind}; if(si.kind==='fish') S.boardCat='漁產'; else if(si.id) S.boardCat='肉蛋'; else if(si.cat==='水果') S.boardCat='水果'; syncSeg('boardCat','cat',S.boardCat); }
+selectItem(start);
+loadBoard();
+})();
+</script>
+</body>
+</html>
