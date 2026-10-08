@@ -19,10 +19,10 @@ const pct = (a,b) => (a && b) ? (a/b - 1)*100 : null;
 
 /** Same rules as the page's 今日划算 list. */
 export function recommend(items){
-  const ok = items.filter(i => !i.monthly && fresh(i) && i.p > 0 && i.a30 > 0 && (i.k !== 'farm' || (i.q30||0) >= 3000) && (i.k !== 'fish' || (i.q30||0) >= 200));
-  const cheap = ok.map(i => ({...i, r: pct(i.p, i.a30), ry: pct(i.p, i.ly)})).filter(i => i.r <= -12).sort((a,b)=>a.r-b.r);
-  const dear = ok.map(i => ({...i, r: pct(i.p, i.a30)})).filter(i => i.r >= 20).sort((a,b)=>b.r-a.r);
-  return {cheap, dear};
+  const ok = items.filter(i => !i.monthly && fresh(i) && i.p > 0 && (i.m30||i.a30) > 0 && (i.cv==null || i.cv <= 0.3) && !/其他|雜/.test(i.n)
+    && (i.k !== 'farm' || (i.q30||0) >= 3000) && (i.k !== 'fish' || (i.q30||0) >= 800));
+  const withR = ok.map(i => ({...i, r: pct(i.p3||i.p, i.m30||i.a30), ry: pct(i.p3||i.p, i.ly)})).filter(i => Math.abs(i.r) <= 70);
+  return {cheap: withR.filter(i => i.r <= -12).sort((a,b)=>a.r-b.r), dear: withR.filter(i => i.r >= 20).sort((a,b)=>b.r-a.r)};
 }
 
 const hits = [];
@@ -47,8 +47,8 @@ if (cfg.dailyDigest && state.digest !== today){
   const {cheap, dear} = recommend(catalog.items);
   if (cheap.length || dear.length){
     digest = true; state.digest = today;
-    body += `## 今日划算\n\n` + cheap.slice(0,10).map(i => `- ${i.n}：${i.p} 元/公斤，比近 30 天均價低 ${Math.abs(i.r).toFixed(0)}%${i.ry!=null&&i.ry<0?`，比去年同期低 ${Math.abs(i.ry).toFixed(0)}%`:''}`).join('\n') + '\n';
-    if (dear.length) body += `\n## 近期偏貴\n\n` + dear.slice(0,6).map(i => `- ${i.n}：${i.p} 元/公斤，比近 30 天均價高 ${i.r.toFixed(0)}%`).join('\n') + '\n';
+    body += `## 今日划算\n\n` + cheap.slice(0,10).map(i => `- ${i.n}：${i.p} 元/公斤，近 3 日均價比近 30 天低 ${Math.abs(i.r).toFixed(0)}%${i.ry!=null&&i.ry<0?`，比去年同期低 ${Math.abs(i.ry).toFixed(0)}%`:''}`).join('\n') + '\n';
+    if (dear.length) body += `\n## 近期偏貴\n\n` + dear.slice(0,6).map(i => `- ${i.n}：${i.p} 元/公斤，近 3 日均價比近 30 天高 ${i.r.toFixed(0)}%`).join('\n') + '\n';
   }
 }
 if (!body){ console.log('no alerts today'); writeJSON(STATE_FILE, state); process.exit(0); }

@@ -30,9 +30,15 @@ function summarize(ts, vs, qs){
   const mean = (a,b) => { let s=0,c=0; for (let i=0;i<n;i++) if (ts[i]>a && ts[i]<=b && vs[i]>0){ s+=vs[i]; c++; } return c ? s/c : null; };
   const a30 = mean(last-30*DAY, last);
   const ly = mean(last-373*DAY, last-357*DAY);
+  // robust stats for recommendations: last-3 mean, 30-day median and coefficient of variation
+  const last30 = []; for (let i=0;i<n;i++) if (ts[i]>last-30*DAY && vs[i]>0) last30.push(vs[i]);
+  const tail = vs.slice(-3).filter(v=>v>0); const p3 = tail.length ? tail.reduce((a,b)=>a+b,0)/tail.length : null;
+  const srt = last30.slice().sort((a,b)=>a-b); const m30 = srt.length ? (srt.length%2 ? srt[(srt.length-1)/2] : (srt[srt.length/2-1]+srt[srt.length/2])/2) : null;
+  const mu = last30.length ? last30.reduce((a,b)=>a+b,0)/last30.length : null;
+  const cv = last30.length>4 ? Math.sqrt(last30.reduce((a,b)=>a+(b-mu)**2,0)/last30.length)/mu : null;
   let q = null, q30 = null;
   if (qs){ q = qs[n-1]; let s=0,c=0; for (let i=0;i<n;i++) if (ts[i]>last-30*DAY){ s+=qs[i]; c++; } q30 = c ? s/c : null; }
-  return {d: iso(last), p: r1(p), p1: r1(p1), p7: r1(p7), a30: r1(a30), ly: r1(ly), q: q==null?null:Math.round(q), q30: q30==null?null:Math.round(q30)};
+  return {d: iso(last), p: r1(p), p1: r1(p1), p7: r1(p7), a30: r1(a30), ly: r1(ly), p3: r1(p3), m30: r1(m30), cv: cv==null?null:Math.round(cv*100)/100, q: q==null?null:Math.round(q), q30: q30==null?null:Math.round(q30)};
 }
 
 /* ---------- generic day-row aggregation ---------- */

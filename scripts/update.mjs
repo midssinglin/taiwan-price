@@ -59,17 +59,22 @@ async function originUpdate(){
   const byMonth = new Map();
   const add = rows => { for (const r of rows){ const t = Date.UTC(+r.YEAR, +r.MONTH-1, +r.PERIOD); const v = num(r.AVGPRICE); if (!(v>0) || !isFinite(t) || t < TODAY - (DAYS_BACK+40)*DAY) continue;
     const k = iso(t).slice(0,7); if (!byMonth.has(k)) byMonth.set(k, new Map()); byMonth.get(k).set(iso(t)+'|'+r.PRODUCTNAME, [iso(t), r.PRODUCTNAME, v]); } };
-  const bulk = await getJSON(`${BASE}/Service/OpenData/TransService.aspx?UnitId=WVOiWSdDjWxx&IsTransData=1&ORGNAME=${encodeURIComponent('當日平均價')}`);
-  if (!Array.isArray(bulk)) throw new Error('unexpected origin response');
-  add(bulk);
-  const state = readJSON(path.join(dir,'state.json'), {backfilled:false});
-  if (!state.backfilled){
-    const names = [...new Set(bulk.map(r => r.PRODUCTNAME))];
-    log('origin backfill for', names.length, 'products');
-    const res = await Promise.all(names.map(n => getJSON(`${BASE}/Service/OpenData/TransService.aspx?UnitId=WVOiWSdDjWxx&IsTransData=1&PRODUCTNAME=${encodeURIComponent(n)}&ORGNAME=${encodeURIComponent('當日平均價')}`).catch(()=>null)));
-    res.forEach(j => Array.isArray(j) && add(j.filter(r => r.ORGNAME === '當日平均價')));
-    if (res.every(Boolean)) state.backfilled = true;
+  const TS = `${BASE}/Service/OpenData/TransService.aspx?UnitId=WVOiWSdDjWxx&IsTransData=1`;
+  const avgName = encodeURIComponent('當日平均價');
+  const [bulkAvg, bulkAll] = await Promise.all([getJSON(`${TS}&ORGNAME=${avgName}`).catch(()=>null), getJSON(TS).catch(()=>null)]);
+  if (!Array.isArray(bulkAvg) && !Array.isArray(bulkAll)) throw new Error('unexpected origin response');
+  const bulks = [bulkAvg, bulkAll].filter(Array.isArray);
+  bulks.forEach(j => add(j.filter(r => r.ORGNAME === '當日平均價')));
+  const state = readJSON(path.join(dir,'state.json'), {});
+  const done = new Set(state.done || []);
+  const names = [...new Set(bulks.flat().map(r => r.PRODUCTNAME).filter(Boolean))].filter(n => !done.has(n));
+  if (names.length){
+    const batch = names.slice(0, 60);
+    log('origin backfill', batch.length, 'of', names.length, 'products');
+    const res = await Promise.all(batch.map(n => getJSON(`${TS}&PRODUCTNAME=${encodeURIComponent(n)}&ORGNAME=${avgName}`).then(j => [n,j]).catch(()=>[n,null])));
+    for (const [n, j] of res) if (Array.isArray(j)){ add(j.filter(r => r.ORGNAME === '當日平均價' && r.PRODUCTNAME === n)); done.add(n); }
   }
+  state.done = [...done].sort();
   for (const [k, m] of byMonth){
     const f = path.join(dir, k+'.json');
     const old = readJSON(f, {rows:[]});
@@ -77,7 +82,7 @@ async function originUpdate(){
     for (const [kk, r] of m) merged.set(kk, r);
     save(f, {month: k, rows: [...merged.values()].sort((a,b)=> a[0]<b[0]?-1:a[0]>b[0]?1:(a[1]<b[1]?-1:1))});
   }
-  save(path.join(dir,'state.json'), state);
+  save(path.join(dir,'state.json'), {done: state.done});
 }
 
 /* ---------- 家禽與蛋：one range request per API ---------- */
@@ -86,12 +91,14 @@ async function poultryUpdate(api){
   if (!j || j.RS !== 'OK' || !Array.isArray(j.Data)) throw new Error('unexpected poultry response');
   const f = path.join(STORE,'poultry',api+'.json');
   const old = readJSON(f, {days:{}});
-  const acc = {};
+  // The API sometimes returns two rows for a date (e.g. one with egg_Price only and a different value).
+  // Keep the most complete row for each date instead of averaging them.
+  const best = {};
   for (const r of j.Data){ const t = parseSlash(r.TransDate); if (!t) continue; const d = iso(t);
-    for (const [k,v] of Object.entries(r)){ if (k==='TransDate'||k==='LunarCalendar') continue; const x = parseFloat(v); if (!(x>0)) continue;
-      const a = ((acc[d] ||= {})[k] ||= [0,0]); a[0]+=x; a[1]++; } }
+    const vals = {}; for (const [k,v] of Object.entries(r)){ if (k==='TransDate'||k==='LunarCalendar') continue; const x = parseFloat(v); if (x>0) vals[k] = x; }
+    const n = Object.keys(vals).length; if (!best[d] || n > best[d].n) best[d] = {n, vals}; }
   const days = {...old.days};
-  for (const [d, o] of Object.entries(acc)) days[d] = Object.fromEntries(Object.entries(o).map(([k,[s,n]]) => [k, Math.round(s/n*100)/100]));
+  for (const [d, o] of Object.entries(best)) days[d] = o.vals;
   for (const d of Object.keys(days)) if (fromIsoSafe(d) < TODAY - (DAYS_BACK+40)*DAY) delete days[d];
   save(f, {api, days: Object.fromEntries(Object.entries(days).sort())});
 }
