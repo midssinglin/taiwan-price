@@ -145,15 +145,23 @@ const pad2 = n => String(n).padStart(2,'0');
 
 /* ---------- 國發會物價資訊看板：15項民生必需品賣場價格（月） ---------- */
 const NDC_BASE = process.env.NDC_BASE || 'https://price.ndc.gov.tw';
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+let ndcCookie = null;
+async function ndcSession(){
+  // the site expects a normal browser session: load the page first and reuse its cookies
+  const r = await fetch(`${NDC_BASE}/p/zh_tw/necessities`, {headers: {'user-agent': BROWSER_UA, 'accept-language': 'zh-TW,zh;q=0.9'}, signal: AbortSignal.timeout(60000)});
+  const set = r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie')].filter(Boolean);
+  ndcCookie = set.map(c => c.split(';')[0]).join('; ');
+  if (!r.ok) log('NDC page HTTP', r.status, '(continuing without session)');
+}
 async function ndcPost(body){
-  const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), 60000);
-  try {
-    const r = await fetch(`${NDC_BASE}/p/zh_tw/necessities_action`, {method:'POST', signal: ctl.signal,
-      headers: {'content-type':'application/x-www-form-urlencoded; charset=UTF-8', 'x-requested-with':'XMLHttpRequest', 'user-agent':'taiwan-price-bot (+github.com)'},
-      body: new URLSearchParams(body).toString()});
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    return await r.json();
-  } finally { clearTimeout(to); }
+  if (ndcCookie === null) await ndcSession();
+  const r = await fetch(`${NDC_BASE}/p/zh_tw/necessities_action`, {method:'POST', signal: AbortSignal.timeout(60000),
+    headers: {'content-type':'application/x-www-form-urlencoded; charset=UTF-8', 'x-requested-with':'XMLHttpRequest', 'user-agent': BROWSER_UA,
+      'origin': NDC_BASE, 'referer': `${NDC_BASE}/p/zh_tw/necessities`, 'accept': 'application/json, text/javascript, */*; q=0.01', ...(ndcCookie ? {cookie: ndcCookie} : {})},
+    body: new URLSearchParams(body).toString()});
+  if (!r.ok) throw new Error('NDC HTTP '+r.status);
+  return await r.json();
 }
 async function ndcUpdate(){
   const cls = await ndcPost({action:'get_class_list', class_id:''});
@@ -180,7 +188,8 @@ async function ndcUpdate(){
 /* ---------- main ---------- */
 async function main(){
   log('start; today', iso(TODAY), 'days back', DAYS_BACK, 'base', BASE);
-  const small = [originUpdate(), retailUpdate(), tpeUpdate(), ndcUpdate(), ...POULTRY_APIS.map(poultryUpdate)].map(p => p.catch(e => log('small task failed:', e.message)));
+  const named = {origin: originUpdate(), retail: retailUpdate(), tpe: tpeUpdate(), ndc: ndcUpdate(), ...Object.fromEntries(POULTRY_APIS.map(a => [a, poultryUpdate(a)]))};
+  const small = Object.entries(named).map(([k,p]) => p.catch(e => log(`${k} failed:`, e.message)));
   // daily tasks, newest first; skip days already stored unless recent
   const tasks = [];
   for (let i = 0; i < DAYS_BACK; i++){
